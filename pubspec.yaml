@@ -1,0 +1,50 @@
+name: smart_receipt
+description: "SmartReceipt: Aplikasi pencatatan keuangan pribadi berbasis OCR on-device dengan klasifikasi kategori pengeluaran otomatis (TF-IDF & Multinomial Naive Bayes)."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # 1. Manajemen basis data lokal
+  sqflite: ^2.4.1
+  path: ^1.9.0
+  path_provider: ^2.1.5
+
+  # 2. Kamera, galeri, dan OCR on-device
+  image_picker: ^1.1.2
+  google_mlkit_text_recognition: ^0.15.0
+  file_picker: ^10.3.3
+
+  # 3. State management (MVVM + ChangeNotifier)
+  provider: ^6.1.2
+
+  # 4. Routing
+  go_router: ^14.6.0
+
+  # 5. Estetika & antarmuka
+  google_fonts: ^6.2.1
+  lucide_icons_flutter: ^3.0.0
+
+  # 6. Format angka (Rupiah) dan tanggal
+  intl: any
+
+  # 7. Hashing password (paket resmi dart.dev, ringan)
+  crypto: ^3.0.5
+
+  # 8. Penyimpanan sesi login (ID pengguna aktif)
+  shared_preferences: ^2.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
