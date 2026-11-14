@@ -74,9 +74,16 @@ class ClassificationOutput {
 
 /// TF-IDF + Multinomial Naive Bayes, ditulis murni Dart (tanpa library eksternal).
 ///
-/// Peningkatan pada versi 2:
-/// - Fitur ganda: kata utuh + n-gram karakter (tahan terhadap singkatan dan
-///   salah baca OCR, mis. "INDOMIE GRG", "SHP SUNSILK").
+/// Fitur model:
+/// - Kata utuh + n-gram karakter (tahan terhadap singkatan dan salah baca OCR,
+///   mis. "INDOMIE GRG", "SHP SUNSILK").
+/// - Kata pertama diberi bobot lebih besar, karena pada struk kata pertama
+///   biasanya menyebut jenis barang/jasa ("JAHIT celana", "SERVIS ac").
+/// - Pasangan kata berurutan (bigram) untuk membedakan frasa seperti
+///   "cetak foto" dan "buku cetak".
+/// - Koreksi ejaan: kata yang tidak dikenal dicocokkan dengan kosakata model
+///   bila hanya berbeda satu huruf ("SUNSLK" -> "sunsilk"), dan angka di tengah
+///   kata dikembalikan menjadi huruf ("IND0MIE" -> "indomie").
 /// - Perluasan singkatan khas struk dan pembuangan satuan (ml, gr, kg, pcs).
 /// - Klasifikasi per barang (satu struk bisa berisi banyak kategori).
 /// - Belajar dari koreksi pengguna lewat [learn].
@@ -85,7 +92,7 @@ class MlService {
       : _trainingData = trainingData ?? MlTrainingData.data;
 
   static const String modelName = 'Multinomial Naive Bayes';
-  static const String modelVersion = '2.0.0';
+  static const String modelVersion = '4.0.0';
   static const String fallbackCategory = MlTrainingData.lainnya;
 
   /// Di bawah nilai ini, hasil ditandai "perlu dicek" (isConfident = false).
@@ -94,9 +101,31 @@ class MlService {
   /// Batas keyakinan petunjuk merchant agar boleh menggantikan tebakan barang.
   static const double merchantHintThreshold = 0.75;
 
-  static const double _alpha = 1.0; // Laplace smoothing
-  static const double _ngramWeight = 0.2;
+  static const double _alpha = 0.3; // Laplace smoothing
+  static const double _ngramWeight = 0.1;
   static const int _minTokenLength = 2;
+
+  /// Bobot kata pertama (jenis barang/jasa biasanya ada di depan).
+  static const double _firstTokenWeight = 2.0;
+
+  /// Bobot pasangan kata berurutan.
+  static const double _bigramWeight = 0.5;
+
+  /// Panjang minimum kata yang boleh dikoreksi ejaannya.
+  static const int _minCorrectionLength = 5;
+
+  /// Angka yang sering terbaca OCR sebagai pengganti huruf.
+  static const Map<String, String> _digitLookalikes = <String, String>{
+    '0': 'o',
+    '1': 'i',
+    '3': 'e',
+    '4': 'a',
+    '5': 's',
+    '8': 'b',
+  };
+  static final RegExp _digitInsideWord = RegExp(r'([a-z])([013458])(?=[a-z])');
+  static final RegExp _nonLetters = RegExp(r'[^a-z\s]');
+  static final RegExp _spaces = RegExp(r'\s+');
 
   /// Contoh koreksi pengguna dihitung beberapa kali agar lebih berpengaruh.
   static const int _userSampleRepeat = 3;
@@ -210,6 +239,11 @@ class MlService {
       <String, Map<String, double>>{};
   final Map<String, double> _classTotal = <String, double>{};
 
+  /// Kosakata kata utuh (kata -> jumlah dokumen) untuk koreksi ejaan.
+  final Map<String, int> _wordDocFreq = <String, int>{};
+  final Map<int, List<String>> _wordsByLength = <int, List<String>>{};
+  final Map<String, String> _correctionCache = <String, String>{};
+
   bool get isTrained => _isTrained;
 
   List<String> get categories => _logPrior.keys.toList();
@@ -220,21 +254,39 @@ class MlService {
     _train();
   }
 
-  /// Melatih ulang dengan menambahkan barang yang sudah divalidasi pengguna.
-  /// Dengan begitu model makin cocok dengan kebiasaan belanja pengguna.
+  /// Menambahkan barang yang sudah divalidasi pengguna sebagai data latih.
+  /// Pelatihan ulang dilakukan secara malas (pada klasifikasi/initialize berikutnya),
+  /// sehingga tidak memblokir antarmuka saat dipanggil.
   void learn(List<LabeledSample> samples) {
     _userSamples = List<LabeledSample>.of(samples);
-    _train();
+    _isTrained = false;
   }
 
   // ------------------------------------------------------- pra-pemrosesan
 
-  /// Huruf kecil, buang angka & simbol, perluas singkatan, buang satuan dan stopword.
+  /// Huruf kecil, pulihkan angka di tengah kata, buang angka & simbol,
+  /// perluas singkatan, buang satuan dan stopword, lalu koreksi ejaan.
   List<String> tokenize(String text) {
-    final String cleaned =
-        text.toLowerCase().replaceAll(RegExp(r'[^a-z\s]'), ' ');
     final List<String> result = <String>[];
-    for (final String raw in cleaned.split(RegExp(r'\s+'))) {
+    for (final String word in _rawTokens(text)) {
+      result.add(_correct(word));
+    }
+    return result;
+  }
+
+  /// Tokenisasi tanpa koreksi ejaan (dipakai saat melatih model).
+  List<String> _rawTokens(String text) {
+    String lower = text.toLowerCase();
+    // Dua kali agar angka berselang ("a0b0c") ikut tertangani.
+    for (int i = 0; i < 2; i++) {
+      lower = lower.replaceAllMapped(
+        _digitInsideWord,
+        (Match m) => '${m.group(1)}${_digitLookalikes[m.group(2)] ?? ''}',
+      );
+    }
+    final String cleaned = lower.replaceAll(_nonLetters, ' ');
+    final List<String> result = <String>[];
+    for (final String raw in cleaned.split(_spaces)) {
       if (raw.isEmpty) continue;
       final List<String> words = _abbreviations[raw] ?? <String>[raw];
       for (final String word in words) {
@@ -248,14 +300,98 @@ class MlService {
     return result;
   }
 
+  /// Mengganti kata tak dikenal dengan kata kosakata yang berjarak satu
+  /// suntingan (hapus/tambah/ganti/tukar satu huruf). Kata yang paling sering
+  /// muncul di data latih dipilih; bila tidak ada yang cocok, kata dibiarkan.
+  String _correct(String word) {
+    if (word.length < _minCorrectionLength ||
+        _wordDocFreq.isEmpty ||
+        _wordDocFreq.containsKey(word)) {
+      return word;
+    }
+    final String? cached = _correctionCache[word];
+    if (cached != null) return cached;
+
+    String best = word;
+    int bestFreq = 0;
+    final int first = word.codeUnitAt(0);
+    final int last = word.codeUnitAt(word.length - 1);
+    for (int length = word.length - 1; length <= word.length + 1; length++) {
+      final List<String>? candidates = _wordsByLength[length];
+      if (candidates == null) continue;
+      for (final String candidate in candidates) {
+        if (candidate.codeUnitAt(0) != first &&
+            candidate.codeUnitAt(candidate.length - 1) != last) {
+          continue;
+        }
+        if (!_withinOneEdit(word, candidate)) continue;
+        final int freq = _wordDocFreq[candidate] ?? 0;
+        if (freq > bestFreq ||
+            (freq == bestFreq &&
+                bestFreq > 0 &&
+                candidate.compareTo(best) < 0)) {
+          best = candidate;
+          bestFreq = freq;
+        }
+      }
+    }
+    _correctionCache[word] = best;
+    return best;
+  }
+
+  /// True bila [a] dan [b] berbeda tepat satu suntingan.
+  bool _withinOneEdit(String a, String b) {
+    final int la = a.length;
+    final int lb = b.length;
+    if ((la - lb).abs() > 1) return false;
+    if (la == lb) {
+      int firstDiff = -1;
+      int secondDiff = -1;
+      int diffs = 0;
+      for (int i = 0; i < la; i++) {
+        if (a.codeUnitAt(i) != b.codeUnitAt(i)) {
+          diffs++;
+          if (diffs == 1) {
+            firstDiff = i;
+          } else if (diffs == 2) {
+            secondDiff = i;
+          } else {
+            return false;
+          }
+        }
+      }
+      if (diffs == 1) return true;
+      // Dua huruf bersebelahan tertukar.
+      return diffs == 2 &&
+          secondDiff == firstDiff + 1 &&
+          a.codeUnitAt(firstDiff) == b.codeUnitAt(secondDiff) &&
+          a.codeUnitAt(secondDiff) == b.codeUnitAt(firstDiff);
+    }
+    final String shorter = la < lb ? a : b;
+    final String longer = la < lb ? b : a;
+    int i = 0;
+    while (
+        i < shorter.length && shorter.codeUnitAt(i) == longer.codeUnitAt(i)) {
+      i++;
+    }
+    return shorter.substring(i) == longer.substring(i + 1);
+  }
+
   String preprocess(String text) => tokenize(text).join(' ');
 
-  /// Fitur = kata utuh (bobot 1) + n-gram karakter 3 dan 4 (bobot kecil).
+  /// Fitur = kata utuh (kata pertama berbobot lebih) + pasangan kata
+  /// berurutan + n-gram karakter 3 dan 4 (bobot kecil).
   Map<String, double> _featureCounts(List<String> tokens) {
     final Map<String, double> counts = <String, double>{};
-    for (final String token in tokens) {
+    for (int index = 0; index < tokens.length; index++) {
+      final String token = tokens[index];
       final String wordKey = 'w:$token';
-      counts[wordKey] = (counts[wordKey] ?? 0) + 1.0;
+      counts[wordKey] =
+          (counts[wordKey] ?? 0) + (index == 0 ? _firstTokenWeight : 1.0);
+      if (index + 1 < tokens.length) {
+        final String pairKey = 'b:${token}_${tokens[index + 1]}';
+        counts[pairKey] = (counts[pairKey] ?? 0) + _bigramWeight;
+      }
       if (token.length >= 3) {
         final String padded = '<$token>';
         for (final int n in const <int>[3, 4]) {
@@ -275,9 +411,17 @@ class MlService {
     final List<Map<String, double>> documents = <Map<String, double>>[];
     final List<String> labels = <String>[];
 
+    _wordDocFreq.clear();
+    _wordsByLength.clear();
+    _correctionCache.clear();
+    final Map<String, int> wordDocFreq = <String, int>{};
+
     void addDocument(String label, String text, int repeat) {
-      final List<String> tokens = tokenize(text);
+      final List<String> tokens = _rawTokens(text);
       if (tokens.isEmpty) return;
+      for (final String word in tokens.toSet()) {
+        wordDocFreq[word] = (wordDocFreq[word] ?? 0) + 1;
+      }
       final Map<String, double> counts = _featureCounts(tokens);
       for (int i = 0; i < repeat; i++) {
         documents.add(counts);
@@ -291,7 +435,9 @@ class MlService {
       }
     });
     for (final LabeledSample sample in _userSamples) {
-      if (_trainingData.containsKey(sample.label)) {
+      // Label kategori kustom ikut dilatih; sampel berasal dari transaksi
+      // yang tersimpan, sehingga nama kategori yang diubah ikut terbarui.
+      if (sample.label.isNotEmpty) {
         addDocument(sample.label, sample.text, _userSampleRepeat);
       }
     }
@@ -323,7 +469,7 @@ class MlService {
       classDocCount[label] = (classDocCount[label] ?? 0) + 1;
       final Map<String, double> sums =
           _featureSum.putIfAbsent(label, () => <String, double>{});
-      for (final TfidfTerm t in _termsFrom(documents[i])) {
+      for (final TfidfTerm t in _termsFrom(documents[i], sort: false)) {
         sums[t.term] = (sums[t.term] ?? 0) + t.weight;
         _classTotal[label] = (_classTotal[label] ?? 0) + t.weight;
       }
@@ -334,12 +480,18 @@ class MlService {
       _logPrior[label] = math.log(count / total);
     });
 
+    // Kosakata untuk koreksi ejaan (diisi setelah semua dokumen diproses).
+    _wordDocFreq.addAll(wordDocFreq);
+    for (final String word in wordDocFreq.keys) {
+      _wordsByLength.putIfAbsent(word.length, () => <String>[]).add(word);
+    }
+
     _isTrained = true;
   }
 
   /// TF = bobot kemunculan / total bobot dokumen. Hanya fitur yang ada di
   /// kosakata model yang dikembalikan, diurutkan dari bobot terbesar.
-  List<TfidfTerm> _termsFrom(Map<String, double> counts) {
+  List<TfidfTerm> _termsFrom(Map<String, double> counts, {bool sort = true}) {
     double sum = 0;
     for (final double v in counts.values) {
       sum += v;
@@ -353,7 +505,9 @@ class MlService {
       final double tf = count / sum;
       result.add(TfidfTerm(term: feature, tf: tf, idf: idf, weight: tf * idf));
     });
-    result.sort((TfidfTerm a, TfidfTerm b) => b.weight.compareTo(a.weight));
+    if (sort) {
+      result.sort((TfidfTerm a, TfidfTerm b) => b.weight.compareTo(a.weight));
+    }
     return result;
   }
 
@@ -393,6 +547,17 @@ class MlService {
       // Tidak ada yang dikenali: jangan menebak, arahkan ke "Lainnya".
       if (probabilities.containsKey(fallbackCategory)) best = fallbackCategory;
       probability = 0.0;
+    }
+    // Tidak ada satu kata pun yang dikenal (hanya potongan huruf yang mirip)
+    // dan keyakinannya rendah: jangan menebak.
+    final bool hasKnownWord =
+        features.any((TfidfTerm t) => t.term.startsWith('w:'));
+    if (features.isNotEmpty &&
+        !hasKnownWord &&
+        probability < confidenceThreshold &&
+        probabilities.containsKey(fallbackCategory)) {
+      best = fallbackCategory;
+      probability = probabilities[fallbackCategory] ?? 0.0;
     }
     final bool confident =
         features.isNotEmpty && probability >= confidenceThreshold;

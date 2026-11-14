@@ -45,15 +45,11 @@ class SummaryCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF10B981), Color(0xFF059669), Color(0xFF047857)],
-        ),
+        gradient: AppColors.cardGradient,
         borderRadius: BorderRadius.circular(28),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x4010B981),
+            color: Color(0x400B5238),
             blurRadius: 28,
             offset: Offset(0, 12),
           ),
@@ -72,6 +68,27 @@ class SummaryCard extends StatelessWidget {
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
                 color: Color(0x1AFFFFFF),
+              ),
+            ),
+          ),
+          // Hiasan kartu miring seperti kartu bank.
+          Positioned(
+            right: -26,
+            bottom: 38,
+            child: Transform.rotate(
+              angle: -0.22,
+              child: Container(
+                width: 120,
+                height: 76,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0x4434C38A), Color(0x1134C38A)],
+                  ),
+                  border: Border.all(color: const Color(0x33FFFFFF)),
+                ),
               ),
             ),
           ),
@@ -225,12 +242,16 @@ class _Pill extends StatelessWidget {
         children: [
           Icon(icon, size: 15, color: AppColors.white),
           const SizedBox(width: 6),
-          Text(
-            text,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: AppColors.white,
-                  fontWeight: FontWeight.w600,
-                ),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
           ),
         ],
       ),

@@ -329,6 +329,49 @@ INNER JOIN ${DbTables.categories} c ON c.${CategoryCols.id} = t.${TransCols.cate
     );
   }
 
+  /// Jumlah pengeluaran per kategori pada tiap transaksi dalam rentang waktu:
+  /// transaksi -> (kategori -> jumlah). Dipakai untuk menyaring riwayat berdasarkan kategori.
+  /// Transaksi lama tanpa rincian barang memakai kategori transaksinya.
+  Future<Map<int, Map<int, double>>> getCategoryAmountsByTransaction(
+    int userId,
+    DateTime start,
+    DateTime endExclusive,
+  ) async {
+    final Database db = await _db;
+    final (String from, String to) = _range(start, endExclusive);
+    final List<Map<String, Object?>> rows = await db.rawQuery(
+      'SELECT x.tid AS tid, x.cid AS cid, SUM(x.amount) AS amount FROM ('
+      'SELECT i.${ItemCols.transactionId} AS tid, i.${ItemCols.categoryId} AS cid, '
+      'i.${ItemCols.totalPrice} AS amount '
+      'FROM ${DbTables.transactionItems} i '
+      'INNER JOIN ${DbTables.transactions} t ON t.${TransCols.id} = i.${ItemCols.transactionId} '
+      'WHERE t.${TransCols.userId} = ? '
+      'AND t.${TransCols.transactionDate} >= ? '
+      'AND t.${TransCols.transactionDate} < ? '
+      'UNION ALL '
+      'SELECT t.${TransCols.id} AS tid, t.${TransCols.categoryId} AS cid, '
+      't.${TransCols.totalAmount} AS amount '
+      'FROM ${DbTables.transactions} t '
+      'WHERE t.${TransCols.userId} = ? '
+      'AND t.${TransCols.transactionDate} >= ? '
+      'AND t.${TransCols.transactionDate} < ? '
+      'AND NOT EXISTS (SELECT 1 FROM ${DbTables.transactionItems} i2 '
+      'WHERE i2.${ItemCols.transactionId} = t.${TransCols.id})'
+      ') x GROUP BY x.tid, x.cid',
+      <Object?>[userId, from, to, userId, from, to],
+    );
+    final Map<int, Map<int, double>> result = <int, Map<int, double>>{};
+    for (final Map<String, Object?> row in rows) {
+      final int? tid = row['tid'] as int?;
+      final int? cid = row['cid'] as int?;
+      if (tid == null || cid == null) continue;
+      final Map<int, double> byCategory =
+          result.putIfAbsent(tid, () => <int, double>{});
+      byCategory[cid] = (row['amount'] as num?)?.toDouble() ?? 0.0;
+    }
+    return result;
+  }
+
   /// Rincian barang sebuah transaksi (urut sesuai input).
   Future<List<TransactionItemModel>> getItems(int transactionId) async {
     final Database db = await _db;
@@ -343,7 +386,7 @@ INNER JOIN ${DbTables.categories} c ON c.${CategoryCols.id} = t.${TransCols.cate
     return rows.map(TransactionItemModel.fromMap).toList();
   }
 
-  /// Barang yang sudah divalidasi pengguna; dipakai melatih ulang model AI.
+  /// Barang yang dikoreksi atau ditambahkan pengguna; dipakai melatih ulang model AI.
   Future<List<LabeledItem>> getTrainingSamples(int userId,
       {int limit = 2000}) async {
     final Database db = await _db;
@@ -353,6 +396,9 @@ INNER JOIN ${DbTables.categories} c ON c.${CategoryCols.id} = t.${TransCols.cate
       'INNER JOIN ${DbTables.transactions} t ON t.${TransCols.id} = i.${ItemCols.transactionId} '
       'INNER JOIN ${DbTables.categories} c ON c.${CategoryCols.id} = i.${ItemCols.categoryId} '
       'WHERE t.${TransCols.userId} = ? '
+      // Hanya koreksi/tambahan pengguna: tebakan AI yang diterima apa adanya tidak
+      // perlu dipelajari ulang dan tidak boleh mengunci label lama.
+      'AND (i.${ItemCols.aiCategoryId} IS NULL OR i.${ItemCols.aiCategoryId} != i.${ItemCols.categoryId}) '
       'ORDER BY i.${ItemCols.id} DESC LIMIT ?',
       <Object?>[userId, limit],
     );

@@ -39,7 +39,8 @@ class _DateInputFieldState extends State<DateInputField> {
   }
 
   DateTime? _parse(String text) {
-    final RegExpMatch? m = RegExp(r'^(\d{2})/(\d{2})/(\d{4})$').firstMatch(text);
+    final RegExpMatch? m =
+        RegExp(r'^(\d{2})/(\d{2})/(\d{4})$').firstMatch(text);
     if (m == null) return null;
     final int? day = int.tryParse(m.group(1) ?? '');
     final int? month = int.tryParse(m.group(2) ?? '');
@@ -60,7 +61,8 @@ class _DateInputFieldState extends State<DateInputField> {
   void initState() {
     super.initState();
     final DateTime? value = widget.value;
-    _controller = TextEditingController(text: value == null ? '' : _format(value));
+    _controller =
+        TextEditingController(text: value == null ? '' : _format(value));
   }
 
   @override
@@ -92,7 +94,8 @@ class _DateInputFieldState extends State<DateInputField> {
     }
     final DateTime? date = _parse(text);
     setState(() {
-      _localError = date == null ? 'Tanggal tidak valid (contoh: 16/11/2019)' : null;
+      _localError =
+          date == null ? 'Tanggal tidak valid (contoh: 16/11/2019)' : null;
     });
     widget.onChanged(date);
   }
@@ -146,11 +149,13 @@ class _DateInputFieldState extends State<DateInputField> {
           decoration: InputDecoration(
             hintText: 'dd/mm/yyyy',
             errorText: error,
-            prefixIcon: Icon(AppIcons.calendar, size: 20, color: AppColors.coolGray),
+            prefixIcon:
+                Icon(AppIcons.calendar, size: 20, color: AppColors.coolGray),
             suffixIcon: IconButton(
               tooltip: 'Pilih dari kalender',
               onPressed: _openCalendar,
-              icon: Icon(AppIcons.calendarDays, size: 20, color: AppColors.emeraldDark),
+              icon: Icon(AppIcons.calendarDays,
+                  size: 20, color: AppColors.emeraldDark),
             ),
           ),
         ),

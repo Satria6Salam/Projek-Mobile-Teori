@@ -9,12 +9,14 @@ import '../../core/theme/app_icons.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/utils/dashboard_period.dart';
 import '../../core/utils/formatters.dart';
+import '../../data/models/category_summary_model.dart';
 import '../../data/models/transaction_model.dart';
 import '../../services/insight_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/dashboard_viewmodel.dart';
 import '../widgets/animated_counter.dart';
-import '../widgets/category_breakdown_card.dart';
+import '../widgets/category_mini_list.dart';
+import '../widgets/custom_button.dart';
 import '../widgets/dashboard_header.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/fade_slide_in.dart';
@@ -22,19 +24,19 @@ import '../widgets/insight_card.dart';
 import '../widgets/message_banner.dart';
 import '../widgets/period_search_sheet.dart';
 import '../widgets/period_selector.dart';
-import '../widgets/persona_card.dart';
-import '../widgets/spending_trend_chart.dart';
+import '../widgets/quick_actions.dart';
 import '../widgets/stat_tile.dart';
 import '../widgets/summary_card.dart';
-import '../widgets/top_merchants_card.dart';
+import '../widgets/theme_illustrations.dart';
 import '../widgets/transaction_card.dart';
 import '../widgets/transaction_detail_sheet.dart';
-import '../widgets/trend_cards.dart';
 
-/// Dasbor Keuangan: ringkasan per hari/bulan/tahun, rekap per kategori, tren harian,
-/// bulanan, dan tahunan, analisis perilaku, toko favorit, dan riwayat transaksi.
+/// Menu Beranda: ringkasan periode, angka penting, rekap singkat kategori,
+/// satu wawasan utama, dan transaksi terbaru. Rincian ada di menu lain.
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
+
+  static const int _recentCount = 5;
 
   Duration _delay(int step) => Duration(milliseconds: 70 * step);
 
@@ -53,44 +55,25 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final DashboardViewModel dash = context.watch<DashboardViewModel>();
     final AuthViewModel auth = context.watch<AuthViewModel>();
-    final TextTheme textTheme = Theme.of(context).textTheme;
     final SpendingAnalytics analytics = dash.analytics;
     final DashboardPeriod period = dash.period;
     final String? error = dash.errorMessage;
     final String periodLabel = AppFormatters.period(period);
-    final List<TransactionModel> transactions = dash.transactions;
+    final List<TransactionModel> recent =
+        dash.transactions.take(_recentCount).toList();
     final bool hasData = analytics.hasData && !dash.isEmpty;
     final TransactionModel? biggest = analytics.biggestTransaction;
-    final SpendingPersona? persona = analytics.persona;
     final bool isDay = period.mode == PeriodMode.day;
     final bool canProject = analytics.isCurrentPeriod && !isDay;
+    final Insight? topInsight =
+        analytics.insights.isEmpty ? null : analytics.insights.first;
+
+    void openCategory(CategorySummaryModel summary) {
+      dash.setCategoryFilter(<int>{summary.categoryId});
+      context.go(AppRoutes.history);
+    }
 
     return Scaffold(
-      floatingActionButton: TweenAnimationBuilder<double>(
-        tween: Tween<double>(begin: 0, end: 1),
-        duration: const Duration(milliseconds: 700),
-        curve: Curves.elasticOut,
-        builder: (BuildContext context, double scale, Widget? child) {
-          return Transform.scale(scale: scale, child: child);
-        },
-        child: FloatingActionButton.extended(
-          onPressed: () => context.push(AppRoutes.scan),
-          backgroundColor: AppColors.emerald,
-          foregroundColor: AppColors.white,
-          elevation: 4,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.card),
-          ),
-          icon: Icon(AppIcons.scanLine),
-          label: Text(
-            'Scan Struk',
-            style: textTheme.labelLarge?.copyWith(
-              color: AppColors.white,
-              fontSize: 15,
-            ),
-          ),
-        ),
-      ),
       body: SafeArea(
         child: RefreshIndicator(
           color: AppColors.emerald,
@@ -109,7 +92,9 @@ class DashboardScreen extends StatelessWidget {
                   child: FadeSlideIn(
                     child: DashboardHeader(
                       name: auth.currentUser?.name ?? '',
-                      onSettingsTap: () => context.push(AppRoutes.settings),
+                      onSettingsTap: () => context.go(AppRoutes.settings),
+                      onNotificationTap: () =>
+                          context.push(AppRoutes.notifications),
                     ),
                   ),
                 ),
@@ -156,6 +141,35 @@ class DashboardScreen extends StatelessWidget {
                         compareLabel: _compareLabel(period.mode),
                         changePercent: analytics.changePercent,
                         topCategoryName: dash.topCategory?.categoryName,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    FadeSlideIn(
+                      delay: _delay(3),
+                      child: QuickActionsRow(
+                        actions: [
+                          QuickAction(
+                            icon: AppIcons.scanLine,
+                            label: 'Scan',
+                            highlight: true,
+                            onTap: () => context.push(AppRoutes.scan),
+                          ),
+                          QuickAction(
+                            icon: AppIcons.penLine,
+                            label: 'Catat',
+                            onTap: () => context.push(AppRoutes.manualEntry),
+                          ),
+                          QuickAction(
+                            icon: AppIcons.piggyBank,
+                            label: 'Anggaran',
+                            onTap: () => context.push(AppRoutes.budget),
+                          ),
+                          QuickAction(
+                            icon: AppIcons.tags,
+                            label: 'Kategori',
+                            onTap: () => context.push(AppRoutes.categories),
+                          ),
+                        ],
                       ),
                     ),
                     if (error != null) ...[
@@ -252,137 +266,77 @@ class DashboardScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (analytics.dailyTotals.isNotEmpty) ...[
-                        const SizedBox(height: AppSpacing.md),
-                        FadeSlideIn(
-                          delay: _delay(5),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(AppSpacing.lg),
-                            decoration: AppDecorations.card(
-                              radius: AppRadius.cardLarge,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Tren Harian',
-                                    style: textTheme.titleLarge),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Pengeluaran per tanggal, $periodLabel',
-                                  style: textTheme.bodySmall,
-                                ),
-                                const SizedBox(height: AppSpacing.md),
-                                SpendingTrendChart(data: analytics.dailyTotals),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                      if (dash.categorySummaries.isNotEmpty) ...[
-                        const SizedBox(height: AppSpacing.md),
-                        FadeSlideIn(
-                          delay: _delay(6),
-                          child: CategoryBreakdownCard(
-                            summaries: dash.categorySummaries,
-                            percentageOf: dash.percentageOf,
-                            total: dash.categoriesTotal,
-                          ),
-                        ),
-                      ],
-                      if (persona != null) ...[
-                        const SizedBox(height: AppSpacing.md),
-                        FadeSlideIn(
-                          delay: _delay(7),
-                          child: PersonaCard(persona: persona),
-                        ),
-                      ],
-                      if (analytics.insights.isNotEmpty) ...[
-                        const SizedBox(height: AppSpacing.lg),
-                        FadeSlideIn(
-                          delay: _delay(8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Analisis Perilaku',
-                                style: textTheme.titleLarge,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Dihitung dari kebiasaan pengeluaran Anda',
-                                style: textTheme.bodySmall,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        for (int i = 0; i < analytics.insights.length; i++) ...[
-                          if (i > 0) const SizedBox(height: 12),
-                          FadeSlideIn(
-                            delay: _delay(9 + i),
-                            child: InsightCard(insight: analytics.insights[i]),
-                          ),
-                        ],
-                      ],
-                      if (analytics.topMerchants.isNotEmpty) ...[
-                        const SizedBox(height: AppSpacing.lg),
-                        FadeSlideIn(
-                          delay: _delay(10),
-                          child: TopMerchantsCard(
-                            merchants: analytics.topMerchants,
-                          ),
-                        ),
-                      ],
-                    ],
-                    if (dash.trends.hasData) ...[
                       const SizedBox(height: AppSpacing.lg),
                       FadeSlideIn(
-                        delay: _delay(11),
-                        child: MonthlyTrendCard(
-                          trends: dash.trends,
-                          period: period,
-                          onOpenMonth: (int month) =>
-                              dash.showMonth(dash.trends.year, month),
+                        delay: _delay(5),
+                        child: _SectionHeader(
+                          title: 'Rekap Singkat',
+                          actionLabel: 'Analisis',
+                          onAction: () => context.go(AppRoutes.analysis),
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.md),
+                      const SizedBox(height: AppSpacing.sm),
                       FadeSlideIn(
-                        delay: _delay(12),
-                        child: YearlyTrendCard(
-                          trends: dash.trends,
-                          period: period,
-                          onOpenYear: dash.showYear,
+                        delay: _delay(6),
+                        child: CategoryMiniList(
+                          summaries: dash.categorySummaries,
+                          percentageOf: dash.percentageOf,
+                          onSelect: openCategory,
                         ),
                       ),
-                    ],
-                    const SizedBox(height: AppSpacing.lg),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Riwayat Transaksi',
-                            style: textTheme.titleLarge,
+                      if (topInsight != null) ...[
+                        const SizedBox(height: AppSpacing.lg),
+                        FadeSlideIn(
+                          delay: _delay(7),
+                          child: _SectionHeader(
+                            title: 'Wawasan untuk Anda',
+                            actionLabel: 'Lainnya',
+                            onAction: () => context.go(AppRoutes.analysis),
                           ),
                         ),
-                        Text(
-                          '${dash.transactionCount} transaksi',
-                          style: textTheme.bodySmall,
+                        const SizedBox(height: AppSpacing.sm),
+                        FadeSlideIn(
+                          delay: _delay(8),
+                          child: InsightCard(insight: topInsight),
                         ),
                       ],
+                    ],
+                    const SizedBox(height: AppSpacing.lg),
+                    FadeSlideIn(
+                      delay: _delay(9),
+                      child: _SectionHeader(
+                        title: 'Transaksi Terbaru',
+                        actionLabel: dash.isEmpty ? null : 'Lihat semua',
+                        onAction: () => context.go(AppRoutes.history),
+                      ),
                     ),
-                    const SizedBox(height: AppSpacing.md),
+                    const SizedBox(height: AppSpacing.sm),
                   ]),
                 ),
               ),
               if (dash.isEmpty)
                 SliverToBoxAdapter(
                   child: FadeSlideIn(
-                    child: EmptyState(
-                      icon: AppIcons.receipt,
-                      title: 'Belum ada transaksi',
-                      message:
-                          'Tidak ada pengeluaran tercatat pada $periodLabel. Gunakan tombol cari untuk melihat periode lain, atau tekan Scan Struk untuk mencatat.',
+                    child: Column(
+                      children: [
+                        EmptyState(
+                          art: ThemeArtKind.scan,
+                          icon: AppIcons.receipt,
+                          title: 'Belum ada transaksi',
+                          message:
+                              'Tidak ada pengeluaran tercatat pada $periodLabel. Pindai struk untuk mulai mencatat, atau gunakan tombol cari untuk melihat periode lain.',
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.xl,
+                          ),
+                          child: CustomButton(
+                            label: 'Scan Struk',
+                            icon: AppIcons.scanLine,
+                            onPressed: () => context.push(AppRoutes.scan),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 )
@@ -393,16 +347,15 @@ class DashboardScreen extends StatelessWidget {
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (BuildContext context, int index) {
-                        final TransactionModel transaction =
-                            transactions[index];
+                        final TransactionModel transaction = recent[index];
                         return FadeSlideIn(
-                          delay: Duration(
-                            milliseconds: 40 * (index < 8 ? index : 8),
-                          ),
+                          delay: Duration(milliseconds: 40 * index),
                           child: Padding(
                             padding: const EdgeInsets.only(bottom: 12),
                             child: TransactionCard(
                               transaction: transaction,
+                              extraCategories:
+                                  dash.categoryCountOf(transaction) - 1,
                               onTap: () => showTransactionDetailSheet(
                                 context,
                                 transaction,
@@ -411,15 +364,52 @@ class DashboardScreen extends StatelessWidget {
                           ),
                         );
                       },
-                      childCount: transactions.length,
+                      childCount: recent.length,
                     ),
                   ),
                 ),
-              const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              if (!dash.isEmpty && dash.transactionCount > _recentCount)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                    child: CustomButton(
+                      label: 'Lihat semua ${dash.transactionCount} transaksi',
+                      variant: CustomButtonVariant.secondary,
+                      onPressed: () => context.go(AppRoutes.history),
+                    ),
+                  ),
+                ),
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.title,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final String title;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+
+    return Row(
+      children: [
+        Expanded(child: Text(title, style: textTheme.titleLarge)),
+        if (actionLabel != null)
+          TextButton(onPressed: onAction, child: Text(actionLabel ?? '')),
+      ],
     );
   }
 }

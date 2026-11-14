@@ -99,8 +99,10 @@ class OcrService {
         (TextLine a, TextLine b) =>
             a.boundingBox.left.compareTo(b.boundingBox.left),
       );
-      final String text =
-          row.map((TextLine l) => l.text.trim()).where((String t) => t.isNotEmpty).join(' ');
+      final String text = row
+          .map((TextLine l) => l.text.trim())
+          .where((String t) => t.isNotEmpty)
+          .join(' ');
       if (text.isNotEmpty) result.add(text);
     }
     return result;

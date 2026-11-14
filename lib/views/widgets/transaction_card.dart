@@ -13,15 +13,27 @@ class TransactionCard extends StatelessWidget {
     super.key,
     required this.transaction,
     required this.onTap,
+    this.amount,
+    this.extraCategories = 0,
   });
 
   final TransactionModel transaction;
   final VoidCallback onTap;
 
+  /// Jumlah yang ditampilkan (mis. jumlah pada kategori yang difilter).
+  /// Null berarti memakai total transaksi.
+  final double? amount;
+
+  /// Jumlah kategori lain pada struk yang sama (untuk lencana "+N").
+  final int extraCategories;
+
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
     final String categoryName = transaction.categoryName ?? 'Lainnya';
+    final double shown = amount ?? transaction.totalAmount;
+    final bool partial =
+        amount != null && (amount! - transaction.totalAmount).abs() > 1;
 
     return Container(
       decoration: AppDecorations.card(),
@@ -47,22 +59,59 @@ class TransactionCard extends StatelessWidget {
                         style: textTheme.titleMedium,
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        '${AppFormatters.shortDate(transaction.transactionDate)}  •  $categoryName',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: textTheme.bodySmall,
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              '${AppFormatters.shortDate(transaction.transactionDate)}  •  $categoryName',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.bodySmall,
+                            ),
+                          ),
+                          if (extraCategories > 0) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.emeraldTint,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                '+$extraCategories',
+                                style: textTheme.labelMedium?.copyWith(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.emeraldDeep,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  AppFormatters.rupiah(transaction.totalAmount),
-                  style: AppTextStyles.amount(
-                    size: 15,
-                    color: AppColors.slateDark,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      AppFormatters.rupiah(shown),
+                      style: AppTextStyles.amount(
+                        size: 15,
+                        color: AppColors.slateDark,
+                      ),
+                    ),
+                    if (partial)
+                      Text(
+                        'dari ${AppFormatters.rupiah(transaction.totalAmount)}',
+                        style: textTheme.labelMedium?.copyWith(fontSize: 10),
+                      ),
+                  ],
                 ),
               ],
             ),

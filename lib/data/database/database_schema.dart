@@ -21,7 +21,10 @@ CREATE TABLE ${DbTables.categories} (
   ${CategoryCols.id} INTEGER PRIMARY KEY AUTOINCREMENT,
   ${CategoryCols.name} TEXT NOT NULL UNIQUE,
   ${CategoryCols.description} TEXT,
-  ${CategoryCols.createdAt} TEXT NOT NULL
+  ${CategoryCols.createdAt} TEXT NOT NULL,
+  ${CategoryCols.iconKey} TEXT,
+  ${CategoryCols.colorValue} INTEGER,
+  ${CategoryCols.isHidden} INTEGER NOT NULL DEFAULT 0
 )''';
 
   static const String createOcrResults = '''
@@ -127,6 +130,48 @@ CREATE TABLE ${DbTables.transactionItems} (
     ON DELETE RESTRICT
 )''';
 
+  static const String createBudgets = '''
+CREATE TABLE ${DbTables.budgets} (
+  ${BudgetCols.id} INTEGER PRIMARY KEY AUTOINCREMENT,
+  ${BudgetCols.userId} INTEGER NOT NULL,
+  ${BudgetCols.categoryId} INTEGER,
+  ${BudgetCols.amount} REAL NOT NULL,
+  ${BudgetCols.createdAt} TEXT NOT NULL,
+  ${BudgetCols.updatedAt} TEXT NOT NULL,
+  FOREIGN KEY (${BudgetCols.userId}) REFERENCES ${DbTables.users}(${UserCols.id})
+    ON DELETE CASCADE,
+  FOREIGN KEY (${BudgetCols.categoryId}) REFERENCES ${DbTables.categories}(${CategoryCols.id})
+    ON DELETE CASCADE
+)''';
+
+  static const String createRecurringTransactions = '''
+CREATE TABLE ${DbTables.recurringTransactions} (
+  ${RecurringCols.id} INTEGER PRIMARY KEY AUTOINCREMENT,
+  ${RecurringCols.userId} INTEGER NOT NULL,
+  ${RecurringCols.merchantName} TEXT NOT NULL,
+  ${RecurringCols.totalAmount} REAL NOT NULL,
+  ${RecurringCols.categoryId} INTEGER NOT NULL,
+  ${RecurringCols.dayOfMonth} INTEGER NOT NULL,
+  ${RecurringCols.startMonth} TEXT NOT NULL,
+  ${RecurringCols.lastGenerated} TEXT,
+  ${RecurringCols.isActive} INTEGER NOT NULL DEFAULT 1,
+  ${RecurringCols.notes} TEXT,
+  ${RecurringCols.createdAt} TEXT NOT NULL,
+  FOREIGN KEY (${RecurringCols.userId}) REFERENCES ${DbTables.users}(${UserCols.id})
+    ON DELETE CASCADE,
+  FOREIGN KEY (${RecurringCols.categoryId}) REFERENCES ${DbTables.categories}(${CategoryCols.id})
+    ON DELETE RESTRICT
+)''';
+
+  /// Perubahan skema dari versi 4 ke versi 5.
+  static const List<String> upgradeToV5 = <String>[
+    'ALTER TABLE ${DbTables.categories} ADD COLUMN ${CategoryCols.iconKey} TEXT',
+    'ALTER TABLE ${DbTables.categories} ADD COLUMN ${CategoryCols.colorValue} INTEGER',
+    'ALTER TABLE ${DbTables.categories} ADD COLUMN ${CategoryCols.isHidden} INTEGER NOT NULL DEFAULT 0',
+    createBudgets,
+    createRecurringTransactions,
+  ];
+
   static const List<String> createIndexes = <String>[
     'CREATE INDEX idx_ocr_user ON ${DbTables.ocrResults}(${OcrCols.userId})',
     'CREATE INDEX idx_tfidf_classification ON ${DbTables.tfidfFeatures}(${TfidfCols.classificationId})',
@@ -153,26 +198,30 @@ CREATE TABLE ${DbTables.transactionItems} (
     createTfidfFeatures,
     createTransactions,
     createTransactionItems,
+    createBudgets,
+    createRecurringTransactions,
   ];
 
-  /// Kategori awal (label kelas Naive Bayes) sesuai rancangan basis data.
+  /// Kategori awal (label kelas Naive Bayes), 15 kategori.
+  /// Urutan menentukan ID pada instalasi baru. Enam kategori pertama adalah
+  /// kategori lama; sembilan berikutnya ditambahkan pada basis data versi 4.
   static const List<Map<String, String>> defaultCategories =
       <Map<String, String>>[
     <String, String>{
       'name': 'Konsumsi',
-      'description': 'Makanan dan minuman',
+      'description': 'Makanan dan minuman siap santap, camilan, dan kopi',
     },
     <String, String>{
       'name': 'Transportasi',
-      'description': 'BBM, parkir, transportasi',
+      'description': 'BBM, parkir, tol, ojek online, dan servis kendaraan',
     },
     <String, String>{
       'name': 'Kesehatan',
-      'description': 'Obat dan kebutuhan kesehatan',
+      'description': 'Obat, vitamin, dokter, dan kebutuhan kesehatan',
     },
     <String, String>{
       'name': 'Belanja',
-      'description': 'Barang kebutuhan pribadi',
+      'description': 'Belanja umum dan barang lain-lain',
     },
     <String, String>{
       'name': 'Lainnya',
@@ -181,6 +230,42 @@ CREATE TABLE ${DbTables.transactionItems} (
     <String, String>{
       'name': 'Elektronik',
       'description': 'Perangkat, komponen, dan aksesori elektronik',
+    },
+    <String, String>{
+      'name': 'Bahan Makanan',
+      'description': 'Bahan masakan, sayur, buah, daging, dan bumbu',
+    },
+    <String, String>{
+      'name': 'Perawatan Diri',
+      'description': 'Sabun, sampo, skincare, kosmetik, dan perawatan tubuh',
+    },
+    <String, String>{
+      'name': 'Rumah Tangga',
+      'description': 'Perabot, alat dapur, pembersih, dan kebutuhan rumah',
+    },
+    <String, String>{
+      'name': 'Pakaian & Aksesori',
+      'description': 'Pakaian, sepatu, tas, dan aksesori',
+    },
+    <String, String>{
+      'name': 'Pendidikan',
+      'description': 'Buku, alat tulis, biaya sekolah, dan kursus',
+    },
+    <String, String>{
+      'name': 'Hiburan',
+      'description': 'Hiburan, hobi, olahraga, dan langganan streaming',
+    },
+    <String, String>{
+      'name': 'Tagihan & Utilitas',
+      'description': 'Listrik, air, internet, pulsa, pajak, dan cicilan',
+    },
+    <String, String>{
+      'name': 'Jasa & Layanan',
+      'description': 'Laundry, salon, servis, pengiriman, dan biaya layanan',
+    },
+    <String, String>{
+      'name': 'Donasi & Sosial',
+      'description': 'Donasi, zakat, kado, dan pengeluaran sosial',
     },
   ];
 }

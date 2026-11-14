@@ -101,8 +101,12 @@ class PasswordStrengthMeter extends StatelessWidget {
           text: 'Minimal 8 karakter',
           ok: AuthViewModel.passwordHasMinLength(password),
         ),
-        _Rule(text: 'Mengandung huruf', ok: AuthViewModel.passwordHasLetter(password)),
-        _Rule(text: 'Mengandung angka', ok: AuthViewModel.passwordHasDigit(password)),
+        _Rule(
+            text: 'Mengandung huruf',
+            ok: AuthViewModel.passwordHasLetter(password)),
+        _Rule(
+            text: 'Mengandung angka',
+            ok: AuthViewModel.passwordHasDigit(password)),
       ],
     );
   }
@@ -141,7 +145,8 @@ class _Rule extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             text,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color),
+            style:
+                Theme.of(context).textTheme.bodySmall?.copyWith(color: color),
           ),
         ],
       ),

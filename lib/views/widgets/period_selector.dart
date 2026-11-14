@@ -58,7 +58,8 @@ class PeriodSelector extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 250),
-                  transitionBuilder: (Widget child, Animation<double> animation) {
+                  transitionBuilder:
+                      (Widget child, Animation<double> animation) {
                     return FadeTransition(opacity: animation, child: child);
                   },
                   child: Column(

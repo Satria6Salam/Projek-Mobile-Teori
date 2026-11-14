@@ -16,6 +16,8 @@ import 'package:smart_receipt/data/repositories/repository_exception.dart';
 import 'package:smart_receipt/data/repositories/session_repository.dart';
 import 'package:smart_receipt/data/repositories/transaction_repository.dart';
 import 'package:smart_receipt/data/repositories/user_repository.dart';
+import 'package:smart_receipt/services/image_enhancement_service.dart';
+import 'package:smart_receipt/services/image_enhancer.dart';
 import 'package:smart_receipt/services/image_format_service.dart';
 import 'package:smart_receipt/services/image_picker_service.dart';
 import 'package:smart_receipt/services/image_storage_service.dart';
@@ -98,6 +100,15 @@ class FakeCategoryRepository extends Fake implements CategoryRepository {
       'Belanja',
       'Lainnya',
       'Elektronik',
+      'Bahan Makanan',
+      'Perawatan Diri',
+      'Rumah Tangga',
+      'Pakaian & Aksesori',
+      'Pendidikan',
+      'Hiburan',
+      'Tagihan & Utilitas',
+      'Jasa & Layanan',
+      'Donasi & Sosial',
     ];
     return <CategoryModel>[
       for (int i = 0; i < names.length; i++)
@@ -152,8 +163,7 @@ class FakeTransactionRepository extends Fake implements TransactionRepository {
     return <LabeledItem>[];
   }
 
-  Iterable<TransactionModel> _between(
-      int userId, DateTime start, DateTime end) {
+  Iterable<TransactionModel> _between(int userId, DateTime start, DateTime end) {
     return stored.where((TransactionModel t) {
       final DateTime d = t.transactionDate;
       return t.userId == userId && !d.isBefore(start) && d.isBefore(end);
@@ -225,6 +235,18 @@ class FakeTransactionRepository extends Fake implements TransactionRepository {
       }
     }
     return result;
+  }
+
+  @override
+  Future<Map<int, Map<int, double>>> getCategoryAmountsByTransaction(
+    int userId,
+    DateTime start,
+    DateTime endExclusive,
+  ) async {
+    return <int, Map<int, double>>{
+      for (final TransactionModel t in _between(userId, start, endExclusive))
+        if (t.id != null) t.id!: <int, double>{t.categoryId: t.totalAmount},
+    };
   }
 
   @override
@@ -336,20 +358,58 @@ class FakeImagePickerService extends Fake implements ImagePickerService {
 }
 
 class FakeOcrService extends Fake implements OcrService {
-  FakeOcrService({this.result, this.error});
+  FakeOcrService({this.result, this.error, this.resultsByPath});
 
   OcrResult? result;
   Object? error;
 
+  /// Hasil berbeda per file (mis. foto asli vs foto yang diperjelas).
+  Map<String, OcrResult>? resultsByPath;
+  final List<String> readPaths = <String>[];
+
   @override
   Future<OcrResult> recognizeFromFile(String imagePath) async {
+    readPaths.add(imagePath);
     final Object? failure = error;
     if (failure != null) throw failure;
+    final OcrResult? byPath = resultsByPath?[imagePath];
+    if (byPath != null) return byPath;
     return result ?? const OcrResult(rawText: '', lineCount: 0);
   }
 
   @override
   Future<void> dispose() async {}
+}
+
+class FakeImageEnhancementService extends Fake
+    implements ImageEnhancementService {
+  FakeImageEnhancementService({this.available = true});
+
+  static const String enhancedPath = '/tmp/enhanced.jpg';
+
+  final bool available;
+  int enhanceCalls = 0;
+  int discardCalls = 0;
+
+  @override
+  Future<EnhancedImage?> enhance(String imagePath) async {
+    enhanceCalls++;
+    if (!available) return null;
+    return const EnhancedImage(
+      path: enhancedPath,
+      quality: ImageQuality(
+        brightness: 200,
+        inkContrast: 12,
+        lightUnevenness: 1.1,
+        sharpness: 0.4,
+      ),
+    );
+  }
+
+  @override
+  Future<void> discard(EnhancedImage image) async {
+    discardCalls++;
+  }
 }
 
 // ================================================================ pembantu
@@ -359,8 +419,7 @@ Future<AuthViewModel> buildLoggedInAuth() async {
     userRepository: FakeUserRepository(),
     sessionRepository: FakeSessionRepository(),
   );
-  await auth.register(
-      name: 'Budi', email: 'budi@mail.com', password: 'rahasia1');
+  await auth.register(name: 'Budi', email: 'budi@mail.com', password: 'rahasia1');
   await auth.login(email: 'budi@mail.com', password: 'rahasia1');
   return auth;
 }
@@ -384,6 +443,7 @@ Future<ScanViewModel> buildScan({
   required FakeTransactionRepository txRepo,
   FakeImageFormatService? formatService,
   FakeImagePickerService? pickerService,
+  FakeImageEnhancementService? enhancementService,
   void Function()? onSaved,
 }) async {
   final AuthViewModel auth = await buildLoggedInAuth();
@@ -399,6 +459,7 @@ Future<ScanViewModel> buildScan({
     imageStorageService: FakeImageStorageService(),
     imageFormatService: formatService ?? FakeImageFormatService(),
     imagePickerService: pickerService ?? FakeImagePickerService(),
+    imageEnhancementService: enhancementService,
     onTransactionSaved: onSaved,
   );
 }
@@ -457,8 +518,7 @@ void main() {
     });
 
     test('registrasi dengan email yang sudah dipakai ditolak', () async {
-      await auth.register(
-          name: 'Budi', email: 'budi@mail.com', password: 'rahasia1');
+      await auth.register(name: 'Budi', email: 'budi@mail.com', password: 'rahasia1');
       final bool ok = await auth.register(
         name: 'Budi Dua',
         email: 'BUDI@mail.com',
@@ -469,10 +529,8 @@ void main() {
     });
 
     test('login berhasil menyimpan sesi', () async {
-      await auth.register(
-          name: 'Budi', email: 'budi@mail.com', password: 'rahasia1');
-      final bool ok =
-          await auth.login(email: 'budi@mail.com', password: 'rahasia1');
+      await auth.register(name: 'Budi', email: 'budi@mail.com', password: 'rahasia1');
+      final bool ok = await auth.login(email: 'budi@mail.com', password: 'rahasia1');
       expect(ok, isTrue);
       expect(auth.isLoggedIn, isTrue);
       expect(auth.currentUser?.name, 'Budi');
@@ -480,10 +538,8 @@ void main() {
     });
 
     test('password salah menampilkan pesan galat', () async {
-      await auth.register(
-          name: 'Budi', email: 'budi@mail.com', password: 'rahasia1');
-      final bool ok =
-          await auth.login(email: 'budi@mail.com', password: 'salah123');
+      await auth.register(name: 'Budi', email: 'budi@mail.com', password: 'rahasia1');
+      final bool ok = await auth.login(email: 'budi@mail.com', password: 'salah123');
       expect(ok, isFalse);
       expect(auth.isLoggedIn, isFalse);
       expect(auth.errorMessage, 'Username atau Password salah');
@@ -492,8 +548,7 @@ void main() {
     test('format email salah ditolak sebelum ke database', () async {
       final bool ok = await auth.login(email: 'abc', password: 'rahasia1');
       expect(ok, isFalse);
-      expect(auth.errorMessage,
-          'Format email tidak valid (contoh: nama@email.com)');
+      expect(auth.errorMessage, 'Format email tidak valid (contoh: nama@email.com)');
     });
 
     test('login dikunci sementara setelah 5 kali gagal', () async {
@@ -503,8 +558,7 @@ void main() {
         sessionRepository: session,
         clock: () => now,
       );
-      await locked.register(
-          name: 'Budi', email: 'budi@mail.com', password: 'rahasia1');
+      await locked.register(name: 'Budi', email: 'budi@mail.com', password: 'rahasia1');
 
       for (int i = 0; i < AuthViewModel.maxFailedAttempts; i++) {
         await locked.login(email: 'budi@mail.com', password: 'salah123');
@@ -512,19 +566,16 @@ void main() {
       expect(locked.errorMessage, contains('Terlalu banyak percobaan gagal'));
 
       // Password benar pun ditolak selama masih terkunci.
-      expect(await locked.login(email: 'budi@mail.com', password: 'rahasia1'),
-          isFalse);
+      expect(await locked.login(email: 'budi@mail.com', password: 'rahasia1'), isFalse);
       expect(locked.errorMessage, contains('Coba lagi dalam'));
 
       // Setelah masa kunci lewat, login normal kembali.
       now = now.add(const Duration(seconds: 31));
-      expect(await locked.login(email: 'budi@mail.com', password: 'rahasia1'),
-          isTrue);
+      expect(await locked.login(email: 'budi@mail.com', password: 'rahasia1'), isTrue);
     });
 
     test('sesi tersimpan dipulihkan oleh checkSession', () async {
-      await auth.register(
-          name: 'Budi', email: 'budi@mail.com', password: 'rahasia1');
+      await auth.register(name: 'Budi', email: 'budi@mail.com', password: 'rahasia1');
       await auth.login(email: 'budi@mail.com', password: 'rahasia1');
 
       final AuthViewModel restarted = AuthViewModel(
@@ -540,8 +591,7 @@ void main() {
     });
 
     test('logout menghapus sesi', () async {
-      await auth.register(
-          name: 'Budi', email: 'budi@mail.com', password: 'rahasia1');
+      await auth.register(name: 'Budi', email: 'budi@mail.com', password: 'rahasia1');
       await auth.login(email: 'budi@mail.com', password: 'rahasia1');
       await auth.logout();
       expect(auth.isLoggedIn, isFalse);
@@ -574,8 +624,7 @@ void main() {
 
     test('validator password registrasi', () {
       expect(AuthViewModel.validatePassword(''), 'Password wajib diisi');
-      expect(AuthViewModel.validatePassword('abc12'),
-          'Password minimal 8 karakter');
+      expect(AuthViewModel.validatePassword('abc12'), 'Password minimal 8 karakter');
       expect(
         AuthViewModel.validatePassword('abcdefgh'),
         'Password harus mengandung angka',
@@ -598,8 +647,7 @@ void main() {
     test('kekuatan password', () {
       expect(AuthViewModel.evaluatePassword(''), PasswordStrength.empty);
       expect(AuthViewModel.evaluatePassword('abc'), PasswordStrength.weak);
-      expect(
-          AuthViewModel.evaluatePassword('Rahasia123!'), PasswordStrength.good);
+      expect(AuthViewModel.evaluatePassword('Rahasia123!'), PasswordStrength.good);
       expect(
         AuthViewModel.evaluatePassword('Rahasia123!xyz'),
         PasswordStrength.strong,
@@ -608,8 +656,7 @@ void main() {
   });
 
   group('DashboardViewModel', () {
-    TransactionModel tx(
-        int id, double amount, int categoryId, String category) {
+    TransactionModel tx(int id, double amount, int categoryId, String category) {
       final DateTime now = DateTime.now();
       return TransactionModel(
         id: id,
@@ -625,8 +672,7 @@ void main() {
       );
     }
 
-    test('memuat total, rekap kategori, analitik, dan riwayat bulan ini',
-        () async {
+    test('memuat total, rekap kategori, analitik, dan riwayat bulan ini', () async {
       final FakeTransactionRepository repo = FakeTransactionRepository()
         ..stored.addAll(<TransactionModel>[
           tx(1, 10000, 1, 'Konsumsi'),
@@ -645,8 +691,7 @@ void main() {
       expect(dash.monthlyTotal, 40000);
       expect(dash.transactionCount, 2);
       expect(dash.topCategory?.categoryName, 'Belanja');
-      expect(
-          dash.percentageOf(dash.categorySummaries.first), closeTo(0.75, 1e-9));
+      expect(dash.percentageOf(dash.categorySummaries.first), closeTo(0.75, 1e-9));
       expect(dash.analytics.transactionCount, 2);
       expect(dash.analytics.dailyTotals, isNotEmpty);
       expect(dash.analytics.biggestTransaction?.totalAmount, 30000);
@@ -669,6 +714,37 @@ void main() {
       expect(dash.monthlyTotal, 0);
       expect(dash.isEmpty, isTrue);
       expect(dash.canGoNext, isTrue);
+    });
+
+    test('filter kategori, pencarian, dan urutan riwayat', () async {
+      final FakeTransactionRepository repo = FakeTransactionRepository()
+        ..stored.addAll(<TransactionModel>[
+          tx(1, 10000, 1, 'Konsumsi'),
+          tx(2, 30000, 4, 'Belanja'),
+          tx(3, 20000, 1, 'Konsumsi'),
+        ]);
+      final DashboardViewModel dash = DashboardViewModel(
+        authViewModel: await buildLoggedInAuth(),
+        transactionRepository: repo,
+        ocrResultRepository: FakeOcrResultRepository(),
+        imageStorageService: FakeImageStorageService(),
+      );
+      await dash.loadDashboard();
+      expect(dash.filteredTransactions.length, 3);
+
+      dash.toggleCategoryFilter(1);
+      expect(dash.filteredTransactions.length, 2);
+      expect(dash.filteredTotal, 30000);
+
+      dash.toggleCategoryFilter(1);
+      dash.setSort(HistorySort.highest);
+      expect(dash.filteredTransactions.first.totalAmount, 30000);
+
+      dash.setSearchQuery('toko 3');
+      expect(dash.filteredTransactions.length, 1);
+
+      dash.clearFilters();
+      expect(dash.filteredTransactions.length, 3);
     });
 
     test('menghapus transaksi ikut menghapus foto struk', () async {
@@ -793,8 +869,7 @@ void main() {
   });
 
   group('ScanViewModel', () {
-    test('alur sukses: barang terbaca dan dikelompokkan per kategori',
-        () async {
+    test('alur sukses: barang terbaca dan dikelompokkan per kategori', () async {
       final ScanViewModel scan = await readyScan(
         sampleReceipt,
         FakeTransactionRepository(),
@@ -823,20 +898,19 @@ void main() {
       };
       expect(byCategory, <String, double>{
         'Konsumsi': 12000,
-        'Belanja': 25000,
+        'Perawatan Diri': 25000,
         'Kesehatan': 8000,
       });
       // Kelompok dengan subtotal terbesar tampil lebih dulu.
-      expect(scan.groupedItems.first.categoryName, 'Belanja');
+      expect(scan.groupedItems.first.categoryName, 'Perawatan Diri');
 
       expect(await scan.saveTransaction(), isTrue);
       expect(repo.lastItems.length, 3);
-      // Kategori utama transaksi = kategori dengan jumlah terbesar (Belanja = id 4).
-      expect(repo.stored.first.categoryId, 4);
+      // Kategori utama transaksi = kategori dengan jumlah terbesar (Perawatan Diri = id 8).
+      expect(repo.stored.first.categoryId, 8);
     });
 
-    test('struk Surya Elektronik: semua barang tercatat sebagai Elektronik',
-        () async {
+    test('struk Surya Elektronik: semua barang tercatat sebagai Elektronik', () async {
       const String receipt = 'sURYA ELEKTRONIK\n'
           'Jl. Veteran Utara No.248B\n'
           'Telp. 0411 3628529\n'
@@ -870,8 +944,102 @@ void main() {
       expect(repo.stored.first.categoryId, 6); // Elektronik
     });
 
-    test('kategori "Lainnya" selalu berada di urutan terakhir pilihan',
-        () async {
+    test('foto pudar: foto diperjelas, dibaca ulang, hasil terbaik dipakai', () async {
+      // Foto asli hanya terbaca sebagian (dua barang dan total hilang).
+      const String fadedText = 'INDOMARET\n'
+          '01/10/2026\n'
+          'Roti 12.000';
+      final FakeOcrService ocr = FakeOcrService(
+        result: ocrOf(fadedText),
+        resultsByPath: <String, OcrResult>{
+          FakeImageEnhancementService.enhancedPath: ocrOf(sampleReceipt),
+        },
+      );
+      final FakeImageEnhancementService enhancer = FakeImageEnhancementService();
+      final ScanViewModel scan = await buildScan(
+        ocr: ocr,
+        txRepo: FakeTransactionRepository(),
+        enhancementService: enhancer,
+      );
+
+      await scan.processImage(
+        imagePath: '/tmp/struk.jpg',
+        source: ScanSource.gallery,
+      );
+
+      expect(scan.status, ScanStatus.ready);
+      expect(enhancer.enhanceCalls, 1);
+      expect(enhancer.discardCalls, 1);
+      expect(ocr.readPaths.length, 2);
+      expect(scan.draft?.usedEnhancedImage, isTrue);
+      expect(scan.draft?.qualityNotes, contains('tulisan pudar'));
+      expect(scan.draft?.items.length, 2);
+      expect(scan.draft?.totalAmount, 17000);
+    });
+
+    test('foto jelas dan lengkap tidak dibaca dua kali', () async {
+      final FakeOcrService ocr = FakeOcrService(result: ocrOf(sampleReceipt));
+      final FakeImageEnhancementService enhancer = FakeImageEnhancementService();
+      final ScanViewModel scan = await buildScan(
+        ocr: ocr,
+        txRepo: FakeTransactionRepository(),
+        enhancementService: enhancer,
+      );
+
+      await scan.processImage(
+        imagePath: '/tmp/struk.jpg',
+        source: ScanSource.gallery,
+      );
+
+      expect(scan.status, ScanStatus.ready);
+      expect(enhancer.enhanceCalls, 0);
+      expect(ocr.readPaths.length, 1);
+      expect(scan.draft?.usedEnhancedImage, isFalse);
+      expect(scan.draft?.qualityNotes, isEmpty);
+    });
+
+    test('foto asli tidak terbaca tetapi foto yang diperjelas terbaca', () async {
+      final FakeOcrService ocr = FakeOcrService(
+        result: ocrOf('..'),
+        resultsByPath: <String, OcrResult>{
+          FakeImageEnhancementService.enhancedPath: ocrOf(sampleReceipt),
+        },
+      );
+      final ScanViewModel scan = await buildScan(
+        ocr: ocr,
+        txRepo: FakeTransactionRepository(),
+        enhancementService: FakeImageEnhancementService(),
+      );
+
+      await scan.processImage(
+        imagePath: '/tmp/struk.jpg',
+        source: ScanSource.gallery,
+      );
+
+      expect(scan.status, ScanStatus.ready);
+      expect(scan.draft?.merchantName, 'Indomaret');
+      expect(scan.draft?.usedEnhancedImage, isTrue);
+    });
+
+    test('format tak dapat diperjelas: hasil foto asli tetap dipakai', () async {
+      final FakeOcrService ocr = FakeOcrService(result: ocrOf('TOKO\nRoti 12.000'));
+      final ScanViewModel scan = await buildScan(
+        ocr: ocr,
+        txRepo: FakeTransactionRepository(),
+        enhancementService: FakeImageEnhancementService(available: false),
+      );
+
+      await scan.processImage(
+        imagePath: '/tmp/struk.jpg',
+        source: ScanSource.gallery,
+      );
+
+      expect(scan.status, ScanStatus.ready);
+      expect(ocr.readPaths.length, 1);
+      expect(scan.draft?.usedEnhancedImage, isFalse);
+    });
+
+    test('kategori "Lainnya" selalu berada di urutan terakhir pilihan', () async {
       final ScanViewModel scan = await readyScan(
         sampleReceipt,
         FakeTransactionRepository(),
@@ -886,8 +1054,7 @@ void main() {
         txRepo: FakeTransactionRepository(),
       );
 
-      await scan.processImage(
-          imagePath: '/tmp/buram.jpg', source: ScanSource.camera);
+      await scan.processImage(imagePath: '/tmp/buram.jpg', source: ScanSource.camera);
 
       expect(scan.status, ScanStatus.error);
       expect(scan.errorMessage, 'Gambar Tidak Jelas, Silakan Ulangi');
@@ -899,8 +1066,7 @@ void main() {
         ocr: FakeOcrService(error: const OcrException('Gagal membaca gambar')),
         txRepo: FakeTransactionRepository(),
       );
-      await ocrFail.processImage(
-          imagePath: '/tmp/x.jpg', source: ScanSource.camera);
+      await ocrFail.processImage(imagePath: '/tmp/x.jpg', source: ScanSource.camera);
       expect(ocrFail.errorMessage, 'Gagal membaca gambar');
 
       final ScanViewModel formatFail = await buildScan(
@@ -910,14 +1076,12 @@ void main() {
           error: const ImageFormatException('Format file .pdf tidak didukung.'),
         ),
       );
-      await formatFail.processImage(
-          imagePath: '/tmp/x.pdf', source: ScanSource.file);
+      await formatFail.processImage(imagePath: '/tmp/x.pdf', source: ScanSource.file);
       expect(formatFail.status, ScanStatus.error);
       expect(formatFail.errorMessage, 'Format file .pdf tidak didukung.');
     });
 
-    test('pickAndProcess: file dipilih, dibatalkan, atau izin ditolak',
-        () async {
+    test('pickAndProcess: file dipilih, dibatalkan, atau izin ditolak', () async {
       final ScanViewModel picked = await buildScan(
         ocr: FakeOcrService(result: ocrOf(sampleReceipt)),
         txRepo: FakeTransactionRepository(),
@@ -946,8 +1110,7 @@ void main() {
       expect(denied.errorMessage, 'Tidak dapat mengakses kamera.');
     });
 
-    test('simpan tanpa sunting: is_manual_edit false dan callback terpanggil',
-        () async {
+    test('simpan tanpa sunting: is_manual_edit false dan callback terpanggil', () async {
       final FakeTransactionRepository repo = FakeTransactionRepository();
       int savedCount = 0;
       final ScanViewModel scan = await readyScan(
@@ -978,8 +1141,7 @@ void main() {
       expect(repo.lastOcr?.ocrSource, 'file');
     });
 
-    test('mengubah nama, harga, dan kategori barang menandai sunting manual',
-        () async {
+    test('mengubah nama, harga, dan kategori barang menandai sunting manual', () async {
       final FakeTransactionRepository repo = FakeTransactionRepository();
       final ScanViewModel scan = await readyScan(sampleReceipt, repo);
       final DraftItem first = scan.draft!.items.first;
@@ -1016,8 +1178,7 @@ void main() {
       );
       expect(scan.draft?.items.length, 2);
 
-      scan.addItem(
-          name: 'Pertalite', quantity: 1, unitPrice: 30000, categoryId: 2);
+      scan.addItem(name: 'Pertalite', quantity: 1, unitPrice: 30000, categoryId: 2);
       expect(scan.draft?.items.length, 3);
       expect(scan.groupedItems.length, 2);
 

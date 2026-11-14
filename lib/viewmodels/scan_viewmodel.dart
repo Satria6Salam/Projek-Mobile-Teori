@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../core/constants/category_names.dart';
 import '../core/constants/db_constants.dart';
 import '../data/models/category_model.dart';
 import '../data/models/ml_classification_model.dart';
@@ -12,6 +13,7 @@ import '../data/models/transaction_item_model.dart';
 import '../data/models/transaction_model.dart';
 import '../data/repositories/category_repository.dart';
 import '../data/repositories/transaction_repository.dart';
+import '../services/image_enhancement_service.dart';
 import '../services/image_format_service.dart';
 import '../services/image_picker_service.dart';
 import '../services/image_storage_service.dart';
@@ -19,6 +21,7 @@ import '../services/ml_service.dart';
 import '../services/ml_training_data.dart';
 import '../services/ocr_service.dart';
 import '../services/parsing_service.dart';
+import '../services/receipt_selector.dart';
 import 'auth_viewmodel.dart';
 import 'safe_change_notifier.dart';
 
@@ -93,7 +96,15 @@ class ScanDraft {
     required this.initialTotal,
     required this.initialItemsSignature,
     this.notes = '',
+    this.qualityNotes = const <String>[],
+    this.usedEnhancedImage = false,
   });
+
+  /// Kekurangan foto yang terdeteksi (mis. "tulisan pudar"); kosong bila baik.
+  final List<String> qualityNotes;
+
+  /// True bila hasil dibaca dari foto yang sudah diperjelas otomatis.
+  final bool usedEnhancedImage;
 
   final String imagePath;
   final ScanSource source;
@@ -133,8 +144,12 @@ class ScanViewModel extends ChangeNotifier with SafeChangeNotifier {
     required ImageStorageService imageStorageService,
     required ImageFormatService imageFormatService,
     required ImagePickerService imagePickerService,
+    ImageEnhancementService? imageEnhancementService,
+    ReceiptSelector receiptSelector = const ReceiptSelector(),
     this.onTransactionSaved,
   })  : _auth = authViewModel,
+        _enhancementService = imageEnhancementService,
+        _selector = receiptSelector,
         _ocrService = ocrService,
         _parsingService = parsingService,
         _mlService = mlService,
@@ -162,6 +177,8 @@ class ScanViewModel extends ChangeNotifier with SafeChangeNotifier {
   final CategoryRepository _categoryRepository;
   final TransactionRepository _transactionRepository;
   final ImageStorageService _imageStorageService;
+  final ImageEnhancementService? _enhancementService;
+  final ReceiptSelector _selector;
   final ImageFormatService _imageFormatService;
   final ImagePickerService _pickerService;
 
@@ -249,19 +266,20 @@ class ScanViewModel extends ChangeNotifier with SafeChangeNotifier {
     safeNotify();
   }
 
+  /// Memuat ulang kategori tiap kali dibutuhkan agar perubahan dari layar
+  /// Kelola Kategori langsung terbaca. Kategori tersembunyi tidak dipakai.
   Future<void> _ensureCategories() async {
-    if (_categories.isEmpty) {
-      final List<CategoryModel> loaded =
-          List<CategoryModel>.of(await _categoryRepository.getAll());
-      // "Lainnya" selalu di urutan terakhir agar mudah dicari.
-      loaded.sort((CategoryModel a, CategoryModel b) {
-        final int ra = a.name == MlService.fallbackCategory ? 1 : 0;
-        final int rb = b.name == MlService.fallbackCategory ? 1 : 0;
-        if (ra != rb) return ra.compareTo(rb);
-        return (a.id ?? 0).compareTo(b.id ?? 0);
-      });
-      _categories = loaded;
-    }
+    final List<CategoryModel> loaded = List<CategoryModel>.of(
+      (await _categoryRepository.getAll())
+          .where((CategoryModel c) => !c.isHidden),
+    );
+    // "Lainnya" selalu di urutan terakhir agar mudah dicari.
+    loaded.sort((CategoryModel a, CategoryModel b) {
+      final int byRank =
+          CategoryNames.rank(a.name).compareTo(CategoryNames.rank(b.name));
+      return byRank != 0 ? byRank : (a.id ?? 0).compareTo(b.id ?? 0);
+    });
+    _categories = loaded;
   }
 
   // ------------------------------------------------------ ambil & proses
@@ -304,14 +322,52 @@ class ScanViewModel extends ChangeNotifier with SafeChangeNotifier {
       final String preparedPath = await _imageFormatService.prepare(imagePath);
 
       await _setProgress('Membaca teks struk...');
-      final OcrResult ocr = await _ocrService.recognizeFromFile(preparedPath);
-      if (!ocr.isReadable) {
+      final OcrResult firstOcr =
+          await _ocrService.recognizeFromFile(preparedPath);
+      ReceiptReading reading = ReceiptReading(
+        rawText: firstOcr.rawText,
+        parsed: _parsingService.parse(firstOcr.rawText),
+      );
+      bool readable = firstOcr.isReadable;
+      List<String> qualityNotes = const <String>[];
+
+      // Hasil belum lengkap atau angkanya tidak cocok: perjelas foto
+      // (ratakan cahaya, pertegas tulisan pudar), baca ulang, lalu pilih
+      // hasil yang lebih baik.
+      final ImageEnhancementService? enhancer = _enhancementService;
+      if (enhancer != null &&
+          !(readable && _selector.isComplete(reading.parsed))) {
+        await _setProgress('Memperjelas foto struk...');
+        final EnhancedImage? enhanced = await enhancer.enhance(preparedPath);
+        if (enhanced != null) {
+          qualityNotes = enhanced.quality.notes;
+          try {
+            final OcrResult secondOcr =
+                await _ocrService.recognizeFromFile(enhanced.path);
+            if (secondOcr.isReadable) {
+              final ReceiptReading second = ReceiptReading(
+                rawText: secondOcr.rawText,
+                parsed: _parsingService.parse(secondOcr.rawText),
+                fromEnhancedImage: true,
+              );
+              reading = readable ? _selector.choose(reading, second) : second;
+              readable = true;
+            }
+          } on OcrException {
+            // Bacaan kedua gagal: tetap pakai hasil dari foto asli.
+          } finally {
+            await enhancer.discard(enhanced);
+          }
+        }
+      }
+
+      if (!readable) {
         _setError(unreadableMessage);
         return;
       }
 
       await _setProgress('Mengekstrak data transaksi...');
-      final ParsedReceiptData parsed = _parsingService.parse(ocr.rawText);
+      final ParsedReceiptData parsed = reading.parsed;
 
       await _setProgress('Mengklasifikasikan setiap barang...');
       await _mlService.initialize();
@@ -372,7 +428,7 @@ class ScanViewModel extends ChangeNotifier with SafeChangeNotifier {
       _draft = ScanDraft(
         imagePath: preparedPath,
         source: source,
-        rawText: ocr.rawText,
+        rawText: reading.rawText,
         parsed: parsed,
         classification: receiptLevel,
         aiCategoryId: receiptCategory?.id,
@@ -384,6 +440,8 @@ class ScanViewModel extends ChangeNotifier with SafeChangeNotifier {
         initialDate: parsed.transactionDate,
         initialTotal: initialTotal,
         initialItemsSignature: _signature(items),
+        qualityNotes: qualityNotes,
+        usedEnhancedImage: reading.fromEnhancedImage,
       );
       _status = ScanStatus.ready;
       _progressMessage = null;

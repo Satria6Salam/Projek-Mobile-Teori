@@ -57,6 +57,15 @@ class _PreviewScreenState extends State<PreviewScreen> {
     super.dispose();
   }
 
+  String _qualityMessage(ScanDraft draft) {
+    final String issues = draft.qualityNotes.isEmpty
+        ? 'Foto kurang jelas'
+        : 'Foto kurang jelas (${draft.qualityNotes.join(', ')})';
+    return draft.usedEnhancedImage
+        ? '$issues. Foto sudah diperjelas otomatis sebelum dibaca; mohon periksa kembali nama barang dan harganya.'
+        : '$issues. Mohon periksa kembali nama barang dan harganya, atau foto ulang di tempat yang lebih terang.';
+  }
+
   void _useItemsTotal(ScanViewModel scan) {
     scan.useItemsTotal();
     final double? total = scan.draft?.totalAmount;
@@ -162,6 +171,14 @@ class _PreviewScreenState extends State<PreviewScreen> {
                         ? BannerType.success
                         : BannerType.warning,
                   ),
+                  if (draft.qualityNotes.isNotEmpty ||
+                      draft.usedEnhancedImage) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    MessageBanner(
+                      message: _qualityMessage(draft),
+                      type: BannerType.warning,
+                    ),
+                  ],
                   if (saveError != null) ...[
                     const SizedBox(height: AppSpacing.md),
                     MessageBanner(message: saveError),

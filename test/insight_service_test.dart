@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_receipt/core/utils/dashboard_period.dart';
 import 'package:smart_receipt/data/models/category_summary_model.dart';
 import 'package:smart_receipt/data/models/transaction_model.dart';
 import 'package:smart_receipt/services/insight_service.dart';
@@ -178,5 +179,84 @@ void main() {
     final MerchantStat kopi = a.topMerchants
         .firstWhere((MerchantStat m) => m.name.toLowerCase() == 'kopi kenangan');
     expect(kopi.visits, 3);
+  });
+
+  test('analisis tahun penuh: tanpa grafik harian dan rata-rata per hari', () {
+    final SpendingAnalytics a = service.analyzePeriod(
+      period: DashboardPeriod.year(2022),
+      now: now,
+      transactions: <TransactionModel>[
+        tx(1, DateTime(2022, 3, 5), 365000),
+        tx(2, DateTime(2022, 8, 9), 365000),
+        tx(3, DateTime(2022, 11, 2), 365000),
+      ],
+      summaries: <CategorySummaryModel>[summary('Elektronik', 1095000, 3)],
+      total: 1095000,
+    );
+    expect(a.isCurrentPeriod, isFalse);
+    expect(a.totalDays, 365);
+    expect(a.dailyTotals, isEmpty);
+    expect(a.activeDays, 3);
+    expect(a.averagePerDay, closeTo(3000, 1e-9));
+    expect(a.persona?.title, 'Pecinta Gadget');
+  });
+
+  test('analisis satu hari', () {
+    final SpendingAnalytics a = service.analyzePeriod(
+      period: DashboardPeriod.day(DateTime(2019, 11, 16)),
+      now: now,
+      transactions: <TransactionModel>[
+        tx(1, DateTime(2019, 11, 16), 500000),
+        tx(2, DateTime(2019, 11, 16), 375000),
+      ],
+      summaries: <CategorySummaryModel>[summary('Elektronik', 875000, 2)],
+      total: 875000,
+    );
+    expect(a.totalDays, 1);
+    expect(a.transactionCount, 2);
+    expect(a.biggestTransaction?.totalAmount, 500000);
+  });
+
+  group('tren bulanan dan tahunan', () {
+    List<double> months(Map<int, double> values) {
+      return <double>[for (int m = 1; m <= 12; m++) values[m] ?? 0];
+    }
+
+    test('mendeteksi kenaikan 3 bulan berturut-turut, bulan terboros, dan YoY', () {
+      final TrendAnalytics t = service.analyzeTrends(
+        year: 2026,
+        now: now, // 15 Oktober 2026
+        monthlyTotals: months(<int, double>{7: 100000, 8: 200000, 9: 300000}),
+        previousYearMonthlyTotals:
+            months(<int, double>{3: 100000, 4: 100000, 8: 200000}),
+        yearlyTotals: <int, double>{2025: 400000, 2026: 600000},
+      );
+
+      expect(t.peakMonth, 9);
+      expect(t.activeMonths, 3);
+      expect(t.monthlyAverage, closeTo(200000, 1e-9));
+      expect(t.yearOverYearPercent, closeTo(50, 1e-9));
+      expect(t.yearlyTotals.length, 2);
+      expect(t.yearlyTotals.first.year, 2025);
+
+      bool has(InsightTopic topic, String title) => t.insights.any(
+            (Insight i) => i.topic == topic && i.title == title,
+          );
+      expect(has(InsightTopic.monthlyTrend, 'Naik 3 bulan berturut-turut'), isTrue);
+      expect(has(InsightTopic.monthlyTrend, 'Bulan terboros: September'), isTrue);
+      expect(has(InsightTopic.yearlyTrend, 'Lebih boros 50% dari tahun lalu'), isTrue);
+    });
+
+    test('tanpa data menghasilkan pesan belum ada data tren', () {
+      final TrendAnalytics t = service.analyzeTrends(
+        year: 2026,
+        now: now,
+        monthlyTotals: months(<int, double>{}),
+        previousYearMonthlyTotals: months(<int, double>{}),
+        yearlyTotals: <int, double>{},
+      );
+      expect(t.hasData, isFalse);
+      expect(t.insights.first.title, 'Belum ada data tren');
+    });
   });
 }

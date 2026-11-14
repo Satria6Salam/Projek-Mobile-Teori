@@ -7,6 +7,13 @@ class AppIcons {
   AppIcons._();
 
   static IconData get eye => LucideIcons.eye;
+  static IconData get bell => LucideIcons.bell;
+  static IconData get piggyBank => LucideIcons.piggyBank;
+  static IconData get pieChart => LucideIcons.chartPie;
+  static IconData get penLine => LucideIcons.penLine;
+  static IconData get tags => LucideIcons.tags;
+  static IconData get databaseBackup => LucideIcons.databaseBackup;
+  static IconData get shieldCheck => LucideIcons.shieldCheck;
   static IconData get eyeOff => LucideIcons.eyeOff;
   static IconData get mail => LucideIcons.mail;
   static IconData get lock => LucideIcons.lock;
@@ -47,6 +54,18 @@ class AppIcons {
   static IconData get close => LucideIcons.x;
   static IconData get folderOpen => LucideIcons.folderOpen;
   static IconData get search => LucideIcons.search;
+  static IconData get history => LucideIcons.history;
+  static IconData get slidersHorizontal => LucideIcons.slidersHorizontal;
+  static IconData get arrowUpDown => LucideIcons.arrowUpDown;
+  static IconData get layoutDashboard => LucideIcons.layoutDashboard;
+  static IconData get shoppingBasket => LucideIcons.shoppingBasket;
+  static IconData get shirt => LucideIcons.shirt;
+  static IconData get graduationCap => LucideIcons.graduationCap;
+  static IconData get gamepad => LucideIcons.gamepad2;
+  static IconData get zap => LucideIcons.zap;
+  static IconData get wrench => LucideIcons.wrench;
+  static IconData get heartHandshake => LucideIcons.heartHandshake;
+  static IconData get bed => LucideIcons.bed;
 
   // Ikon kategori pengeluaran
   static IconData get utensils => LucideIcons.utensils;

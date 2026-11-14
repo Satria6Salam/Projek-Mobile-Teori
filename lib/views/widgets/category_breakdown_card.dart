@@ -17,11 +17,15 @@ class CategoryBreakdownCard extends StatelessWidget {
     required this.summaries,
     required this.percentageOf,
     required this.total,
+    this.onSelect,
   });
 
   final List<CategorySummaryModel> summaries;
   final double Function(CategorySummaryModel summary) percentageOf;
   final double total;
+
+  /// Dipanggil saat sebuah baris kategori diketuk (mis. untuk membuka riwayat terfilter).
+  final ValueChanged<CategorySummaryModel>? onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +65,8 @@ class CategoryBreakdownCard extends StatelessWidget {
               summary: summaries[i],
               fraction: percentageOf(summaries[i]),
               index: i,
+              onTap:
+                  onSelect == null ? null : () => onSelect?.call(summaries[i]),
             ),
           ],
         ],
@@ -74,71 +80,77 @@ class _CategoryRow extends StatelessWidget {
     required this.summary,
     required this.fraction,
     required this.index,
+    this.onTap,
   });
 
   final CategorySummaryModel summary;
   final double fraction;
   final int index;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
     final CategoryStyle style = CategoryStyle.of(summary.categoryName);
 
-    return Column(
-      children: [
-        Row(
-          children: [
-            CategoryIconBox(categoryName: summary.categoryName, size: 38),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return InkWell(
+      borderRadius: BorderRadius.circular(AppRadius.control),
+      onTap: onTap,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              CategoryIconBox(categoryName: summary.categoryName, size: 38),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(summary.categoryName, style: textTheme.titleMedium),
+                    Text(
+                      '${summary.transactionCount} transaksi',
+                      style: textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(summary.categoryName, style: textTheme.titleMedium),
                   Text(
-                    '${summary.transactionCount} transaksi',
-                    style: textTheme.bodySmall,
+                    AppFormatters.rupiah(summary.totalAmount),
+                    style: AppTextStyles.amount(size: 14),
+                  ),
+                  Text(
+                    AppFormatters.percent(fraction),
+                    style: textTheme.labelMedium?.copyWith(color: style.color),
                   ),
                 ],
               ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  AppFormatters.rupiah(summary.totalAmount),
-                  style: AppTextStyles.amount(size: 14),
-                ),
-                Text(
-                  AppFormatters.percent(fraction),
-                  style: textTheme.labelMedium?.copyWith(color: style.color),
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        TweenAnimationBuilder<double>(
-          tween: Tween<double>(
-            begin: 0,
-            end: fraction.clamp(0.0, 1.0).toDouble(),
+            ],
           ),
-          duration: Duration(milliseconds: 700 + index * 120),
-          curve: Curves.easeOutCubic,
-          builder: (BuildContext context, double value, Widget? child) {
-            return ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                value: value,
-                minHeight: 7,
-                backgroundColor: AppColors.border,
-                valueColor: AlwaysStoppedAnimation<Color>(style.color),
-              ),
-            );
-          },
-        ),
-      ],
+          const SizedBox(height: 8),
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(
+              begin: 0,
+              end: fraction.clamp(0.0, 1.0).toDouble(),
+            ),
+            duration: Duration(milliseconds: 700 + index * 120),
+            curve: Curves.easeOutCubic,
+            builder: (BuildContext context, double value, Widget? child) {
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: value,
+                  minHeight: 7,
+                  backgroundColor: AppColors.border,
+                  valueColor: AlwaysStoppedAnimation<Color>(style.color),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }

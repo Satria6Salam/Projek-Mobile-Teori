@@ -3,7 +3,7 @@ class DbConstants {
   DbConstants._();
 
   static const String databaseName = 'smartreceipt.db';
-  static const int databaseVersion = 3;
+  static const int databaseVersion = 5;
 }
 
 /// Nama tabel.
@@ -18,6 +18,8 @@ class DbTables {
   static const String tfidfFeatures = 'tfidf_features';
   static const String transactions = 'transactions';
   static const String transactionItems = 'transaction_items';
+  static const String budgets = 'budgets';
+  static const String recurringTransactions = 'recurring_transactions';
 }
 
 /// Kolom tabel users.
@@ -40,6 +42,10 @@ class CategoryCols {
   static const String name = 'category_name';
   static const String description = 'description';
   static const String createdAt = 'created_at';
+  // Versi 5: kustomisasi kategori.
+  static const String iconKey = 'icon_key';
+  static const String colorValue = 'color_value';
+  static const String isHidden = 'is_hidden';
 }
 
 /// Kolom tabel ocr_results.
@@ -164,4 +170,33 @@ class ClassificationStatus {
 
   static const String success = 'success';
   static const String failed = 'failed';
+}
+
+/// Kolom tabel budgets (batas pengeluaran bulanan; category_id kosong = batas total).
+class BudgetCols {
+  BudgetCols._();
+
+  static const String id = 'budget_id';
+  static const String userId = 'user_id';
+  static const String categoryId = 'category_id';
+  static const String amount = 'amount';
+  static const String createdAt = 'created_at';
+  static const String updatedAt = 'updated_at';
+}
+
+/// Kolom tabel recurring_transactions (transaksi berulang setiap bulan).
+class RecurringCols {
+  RecurringCols._();
+
+  static const String id = 'recurring_id';
+  static const String userId = 'user_id';
+  static const String merchantName = 'merchant_name';
+  static const String totalAmount = 'total_amount';
+  static const String categoryId = 'category_id';
+  static const String dayOfMonth = 'day_of_month';
+  static const String startMonth = 'start_month';
+  static const String lastGenerated = 'last_generated';
+  static const String isActive = 'is_active';
+  static const String notes = 'notes';
+  static const String createdAt = 'created_at';
 }

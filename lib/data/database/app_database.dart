@@ -44,6 +44,22 @@ class AppDatabase {
         await db.execute(statement);
       }
     }
+    if (oldVersion < 4) {
+      // Versi 4: menambahkan kategori baru (kategori yang sudah ada dilewati).
+      final String now = DbDateUtils.dateTimeToDb(DateTime.now());
+      for (final Map<String, String> category
+          in DatabaseSchema.defaultCategories) {
+        await db.insert(
+          DbTables.categories,
+          <String, Object?>{
+            CategoryCols.name: category['name'],
+            CategoryCols.description: category['description'],
+            CategoryCols.createdAt: now,
+          },
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
+    }
     if (oldVersion < 3) {
       // Versi 3: menambahkan kategori Elektronik (dilewati bila sudah ada).
       await db.insert(
@@ -57,6 +73,51 @@ class AppDatabase {
         conflictAlgorithm: ConflictAlgorithm.ignore,
       );
     }
+    if (oldVersion < 5) {
+      await _upgradeToV5(db);
+    }
+  }
+
+  /// Versi 5: kolom kustomisasi kategori serta tabel anggaran dan transaksi berulang.
+  Future<void> _upgradeToV5(Database db) async {
+    for (final String statement in DatabaseSchema.upgradeToV5) {
+      await db.execute(statement);
+    }
+  }
+
+  /// Lokasi file database pada perangkat (dipakai untuk cadangan).
+  Future<String> get databasePath async {
+    final Directory directory = await getApplicationDocumentsDirectory();
+    return p.join(directory.path, DbConstants.databaseName);
+  }
+
+  /// Memeriksa file cadangan: harus basis data SmartReceipt dengan versi
+  /// yang bisa dibaca aplikasi ini.
+  Future<bool> isCompatibleBackup(File file) async {
+    Database? candidate;
+    try {
+      candidate = await openDatabase(file.path, readOnly: true);
+      final int version = await candidate.getVersion();
+      if (version < 1 || version > DbConstants.databaseVersion) return false;
+      final List<Map<String, Object?>> rows = await candidate.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type = 'table' "
+        "AND name IN ('users', 'transactions')",
+      );
+      return rows.length == 2;
+    } catch (_) {
+      return false;
+    } finally {
+      await candidate?.close();
+    }
+  }
+
+  /// Mengganti isi database dengan file cadangan. Koneksi lama ditutup dulu
+  /// dan dibuka kembali pada akses berikutnya.
+  Future<void> replaceWith(File source) async {
+    final Database db = await database;
+    await db.close();
+    _opening = null;
+    await source.copy(await databasePath);
   }
 
   Future<void> _onCreate(Database db, int version) async {

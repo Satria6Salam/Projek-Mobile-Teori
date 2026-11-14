@@ -5,7 +5,8 @@ import '../../core/theme/category_style.dart';
 
 /// Kotak ikon berwarna sesuai kategori.
 class CategoryIconBox extends StatelessWidget {
-  const CategoryIconBox({super.key, required this.categoryName, this.size = 44});
+  const CategoryIconBox(
+      {super.key, required this.categoryName, this.size = 44});
 
   final String categoryName;
   final double size;

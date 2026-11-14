@@ -775,23 +775,103 @@ class InsightService {
     }
   }
 
-  String? _tipFor(String category) {
-    switch (category.toLowerCase()) {
-      case 'konsumsi':
-        return 'Coba bawa bekal atau masak sendiri 2-3 kali seminggu untuk menekan biaya makan di luar.';
-      case 'transportasi':
-        return 'Pertimbangkan transportasi umum atau berbagi tumpangan untuk perjalanan rutin.';
-      case 'kesehatan':
-        return 'Pastikan Anda memiliki perlindungan seperti BPJS atau asuransi, dan jaga pola hidup sehat untuk menekan biaya berobat.';
-      case 'belanja':
-        return 'Buat daftar belanja dan tunda pembelian non-esensial 24 jam untuk menghindari belanja impulsif.';
-      case 'lainnya':
-        return 'Tinjau tagihan dan langganan rutin; hentikan layanan yang jarang dipakai.';
-      case 'elektronik':
-        return 'Bandingkan harga dan garansi sebelum membeli perangkat; prioritaskan kebutuhan dibanding keinginan.';
-    }
-    return null;
-  }
+  static const Map<String, String> _tips = <String, String>{
+    'Konsumsi':
+        'Coba bawa bekal atau masak sendiri 2-3 kali seminggu untuk menekan biaya makan di luar.',
+    'Bahan Makanan':
+        'Buat menu mingguan dan daftar belanja bahan, lalu beli di pasar atau grosir agar lebih hemat.',
+    'Transportasi':
+        'Pertimbangkan transportasi umum atau berbagi tumpangan untuk perjalanan rutin.',
+    'Kesehatan':
+        'Pastikan Anda memiliki perlindungan seperti BPJS atau asuransi, dan jaga pola hidup sehat untuk menekan biaya berobat.',
+    'Perawatan Diri':
+        'Pilih produk yang benar-benar dipakai dan manfaatkan paket isi ulang agar lebih hemat.',
+    'Rumah Tangga':
+        'Beli kebutuhan rumah dalam kemasan besar atau isi ulang saat ada promo untuk menekan biaya per pemakaian.',
+    'Pakaian & Aksesori':
+        'Tunda pembelian pakaian 24 jam dan pastikan cocok dengan yang sudah dimiliki sebelum membeli.',
+    'Elektronik':
+        'Bandingkan harga dan garansi sebelum membeli perangkat; prioritaskan kebutuhan dibanding keinginan.',
+    'Pendidikan':
+        'Pendidikan adalah investasi. Cari beasiswa, buku bekas, atau materi gratis untuk menekan biaya.',
+    'Hiburan':
+        'Tetapkan batas hiburan bulanan dan tinjau langganan streaming yang jarang dipakai.',
+    'Tagihan & Utilitas':
+        'Tinjau tagihan dan langganan rutin; hentikan layanan yang jarang dipakai dan hemat listrik serta kuota.',
+    'Jasa & Layanan':
+        'Bandingkan beberapa penyedia jasa dan cek biaya layanan tersembunyi sebelum membayar.',
+    'Donasi & Sosial':
+        'Berbagi itu baik. Tetapkan anggaran sosial bulanan agar tetap seimbang dengan kebutuhan Anda.',
+    'Belanja':
+        'Buat daftar belanja dan tunda pembelian non-esensial 24 jam untuk menghindari belanja impulsif.',
+    'Lainnya':
+        'Periksa kembali pengeluaran yang belum terkategori agar rekap Anda lebih akurat.',
+  };
+
+  static const Map<String, List<String>> _personas = <String, List<String>>{
+    'Konsumsi': <String>[
+      'Pencinta Kuliner',
+      'Sebagian besar uang Anda mengalir ke makanan dan minuman. Menikmati hidup itu penting, pantau agar tetap terkendali.',
+    ],
+    'Bahan Makanan': <String>[
+      'Koki Rumahan',
+      'Anda gemar memasak sendiri. Belanja bahan segar adalah pos terbesar Anda, kebiasaan yang biasanya lebih hemat.',
+    ],
+    'Transportasi': <String>[
+      'Si Mobilitas Tinggi',
+      'Anda banyak bergerak! Biaya perjalanan dan kendaraan menjadi pos terbesar pada periode ini.',
+    ],
+    'Kesehatan': <String>[
+      'Peduli Kesehatan',
+      'Anda memprioritaskan kesehatan. Pastikan perlindungan seperti BPJS atau asuransi sudah memadai.',
+    ],
+    'Perawatan Diri': <String>[
+      'Pencinta Perawatan Diri',
+      'Anda rajin merawat diri. Pengeluaran untuk sabun, skincare, dan kosmetik mendominasi periode ini.',
+    ],
+    'Rumah Tangga': <String>[
+      'Penjaga Rumah',
+      'Kebutuhan dan perabot rumah menjadi prioritas Anda. Rumah yang nyaman memang investasi.',
+    ],
+    'Pakaian & Aksesori': <String>[
+      'Penggemar Fashion',
+      'Pakaian, sepatu, dan aksesori mendominasi pengeluaran Anda. Padukan dengan koleksi yang sudah ada agar tidak berlebihan.',
+    ],
+    'Elektronik': <String>[
+      'Pecinta Gadget',
+      'Perangkat dan komponen elektronik menjadi pos terbesar Anda. Bandingkan harga dan cek garansi sebelum membeli.',
+    ],
+    'Pendidikan': <String>[
+      'Pembelajar Giat',
+      'Anda banyak berinvestasi pada pengetahuan: buku, alat tulis, kursus, atau biaya sekolah.',
+    ],
+    'Hiburan': <String>[
+      'Pencari Hiburan',
+      'Hiburan, hobi, dan olahraga menyedot porsi terbesar. Seimbangkan dengan tabungan agar tetap sehat finansial.',
+    ],
+    'Tagihan & Utilitas': <String>[
+      'Pengelola Tagihan',
+      'Tagihan, cicilan, dan kebutuhan rutin mendominasi. Tinjau langganan secara berkala agar tidak ada yang terlupa.',
+    ],
+    'Jasa & Layanan': <String>[
+      'Pengguna Layanan',
+      'Anda banyak memakai jasa seperti laundry, servis, atau pengiriman. Bandingkan penyedia untuk harga terbaik.',
+    ],
+    'Donasi & Sosial': <String>[
+      'Dermawan',
+      'Anda murah hati! Donasi, zakat, dan hadiah mendominasi pengeluaran Anda.',
+    ],
+    'Belanja': <String>[
+      'Pemburu Belanja',
+      'Belanja umum mendominasi pengeluaran Anda. Daftar belanja membantu menghindari pembelian impulsif.',
+    ],
+    'Lainnya': <String>[
+      'Pengeluar Beragam',
+      'Banyak pengeluaran Anda belum terkategori khusus. Periksa kembali agar rekap lebih akurat.',
+    ],
+  };
+
+  String? _tipFor(String category) => _tips[category.trim()];
 
   SpendingPersona _persona(CategorySummaryModel? top, double share) {
     if (top == null || share < 0.35) {
@@ -801,57 +881,15 @@ class InsightService {
             'Pengeluaran Anda tersebar merata di berbagai kategori, pola yang sehat untuk keuangan jangka panjang.',
       );
     }
-    final double percent = share * 100;
-    switch (top.categoryName.toLowerCase()) {
-      case 'konsumsi':
-        return SpendingPersona(
-          title: 'Pencinta Kuliner',
-          description:
-              'Sebagian besar uang Anda mengalir ke makanan dan minuman. Menikmati hidup itu penting, pantau agar tetap terkendali.',
-          categoryName: top.categoryName,
-          sharePercent: percent,
-        );
-      case 'transportasi':
-        return SpendingPersona(
-          title: 'Si Mobilitas Tinggi',
-          description:
-              'Anda banyak bergerak! Biaya perjalanan dan kendaraan menjadi pos terbesar pada periode ini.',
-          categoryName: top.categoryName,
-          sharePercent: percent,
-        );
-      case 'kesehatan':
-        return SpendingPersona(
-          title: 'Peduli Kesehatan',
-          description:
-              'Anda memprioritaskan kesehatan. Pastikan perlindungan seperti BPJS atau asuransi sudah memadai.',
-          categoryName: top.categoryName,
-          sharePercent: percent,
-        );
-      case 'belanja':
-        return SpendingPersona(
-          title: 'Pemburu Belanja',
-          description:
-              'Kebutuhan pribadi dan rumah tangga mendominasi pengeluaran Anda. Daftar belanja membantu menghindari pembelian impulsif.',
-          categoryName: top.categoryName,
-          sharePercent: percent,
-        );
-      case 'elektronik':
-        return SpendingPersona(
-          title: 'Pecinta Gadget',
-          description:
-              'Perangkat dan komponen elektronik menjadi pos terbesar Anda. Bandingkan harga dan cek garansi sebelum membeli.',
-          categoryName: top.categoryName,
-          sharePercent: percent,
-        );
-      default:
-        return SpendingPersona(
-          title: 'Pengelola Tagihan',
-          description:
-              'Tagihan, layanan, dan kebutuhan rutin mendominasi. Tinjau langganan secara berkala agar tidak ada yang terlupa.',
-          categoryName: top.categoryName,
-          sharePercent: percent,
-        );
-    }
+    final List<String>? entry = _personas[top.categoryName.trim()];
+    return SpendingPersona(
+      title: entry == null ? 'Pengeluar Beragam' : entry[0],
+      description: entry == null
+          ? 'Pengeluaran Anda didominasi satu kategori. Pantau agar tetap terkendali.'
+          : entry[1],
+      categoryName: top.categoryName,
+      sharePercent: share * 100,
+    );
   }
 }
 

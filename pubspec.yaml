@@ -19,8 +19,9 @@ dependencies:
 
   # 2. Kamera, galeri, dan OCR on-device
   image_picker: ^1.1.2
+  image: ^4.2.0
   google_mlkit_text_recognition: ^0.15.0
-  file_picker: ^10.3.3
+  file_picker: ^13.3.3
 
   # 3. State management (MVVM + ChangeNotifier)
   provider: ^6.1.2
@@ -40,6 +41,14 @@ dependencies:
 
   # 8. Penyimpanan sesi login (ID pengguna aktif)
   shared_preferences: ^2.3.3
+
+  # 9. Notifikasi lokal (pengingat harian, ringkasan mingguan, anggaran)
+  flutter_local_notifications: ^17.2.2
+  timezone: ^0.9.4
+  flutter_timezone: ^5.1.1
+
+  # 10. Berbagi berkas (laporan CSV dan cadangan database)
+  share_plus: ^13.3.1
 
 dev_dependencies:
   flutter_test:

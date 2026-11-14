@@ -61,8 +61,8 @@ class CategoryRepository {
       throw const RepositoryException('ID kategori tidak ditemukan');
     }
     final Database db = await _db;
-    final Map<String, Object?> values = Map<String, Object?>.of(category.toMap())
-      ..remove(CategoryCols.id);
+    final Map<String, Object?> values =
+        Map<String, Object?>.of(category.toMap())..remove(CategoryCols.id);
     final int count = await db.update(
       DbTables.categories,
       values,

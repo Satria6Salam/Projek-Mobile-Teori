@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../constants/category_names.dart';
 import 'app_icons.dart';
 
 /// Ikon dan warna khas tiap kategori pengeluaran.
@@ -16,44 +17,63 @@ class CategoryStyle {
   /// Warna latar lembut (opacity ~12%) untuk kotak ikon dan lencana.
   final Color tint;
 
+  static CategoryStyle _make(IconData icon, int rgb) {
+    return CategoryStyle(
+      icon: icon,
+      color: Color(0xFF000000 | rgb),
+      tint: Color(0x1F000000 | rgb),
+    );
+  }
+
+  /// Gaya kustom dari pengguna (ikon dan warna), diisi dari tabel categories.
+  static final Map<String, CategoryStyle> _custom = <String, CategoryStyle>{};
+
+  /// Mendaftarkan ikon dan warna kustom untuk satu kategori (berdasarkan nama).
+  static void registerCustom(
+    String categoryName, {
+    required IconData icon,
+    required int colorRgb,
+  }) {
+    _custom[categoryName.trim()] = _make(icon, colorRgb);
+  }
+
+  /// Menghapus semua gaya kustom; dipanggil sebelum daftar kategori dimuat ulang.
+  static void clearCustom() => _custom.clear();
+
   factory CategoryStyle.of(String categoryName) {
-    switch (categoryName.trim().toLowerCase()) {
-      case 'konsumsi':
-        return CategoryStyle(
-          icon: AppIcons.utensils,
-          color: const Color(0xFF10B981),
-          tint: const Color(0x1F10B981),
-        );
-      case 'transportasi':
-        return CategoryStyle(
-          icon: AppIcons.car,
-          color: const Color(0xFF3B82F6),
-          tint: const Color(0x1F3B82F6),
-        );
-      case 'kesehatan':
-        return CategoryStyle(
-          icon: AppIcons.heartPulse,
-          color: const Color(0xFFEC4899),
-          tint: const Color(0x1FEC4899),
-        );
-      case 'belanja':
-        return CategoryStyle(
-          icon: AppIcons.shoppingBag,
-          color: const Color(0xFFF59E0B),
-          tint: const Color(0x1FF59E0B),
-        );
-      case 'elektronik':
-        return CategoryStyle(
-          icon: AppIcons.cpu,
-          color: const Color(0xFF6366F1),
-          tint: const Color(0x1F6366F1),
-        );
+    final CategoryStyle? custom = _custom[categoryName.trim()];
+    if (custom != null) return custom;
+    switch (categoryName.trim()) {
+      case CategoryNames.konsumsi:
+        return _make(AppIcons.utensils, 0x10B981);
+      case CategoryNames.bahanMakanan:
+        return _make(AppIcons.shoppingBasket, 0x84CC16);
+      case CategoryNames.transportasi:
+        return _make(AppIcons.car, 0x3B82F6);
+      case CategoryNames.kesehatan:
+        return _make(AppIcons.heartPulse, 0xEC4899);
+      case CategoryNames.perawatanDiri:
+        return _make(AppIcons.sparkles, 0xA855F7);
+      case CategoryNames.rumahTangga:
+        return _make(AppIcons.bed, 0x14B8A6);
+      case CategoryNames.pakaianAksesori:
+        return _make(AppIcons.shirt, 0xD946EF);
+      case CategoryNames.elektronik:
+        return _make(AppIcons.cpu, 0x6366F1);
+      case CategoryNames.pendidikan:
+        return _make(AppIcons.graduationCap, 0x0EA5E9);
+      case CategoryNames.hiburan:
+        return _make(AppIcons.gamepad, 0x8B5CF6);
+      case CategoryNames.tagihanUtilitas:
+        return _make(AppIcons.zap, 0xEAB308);
+      case CategoryNames.jasaLayanan:
+        return _make(AppIcons.wrench, 0x06B6D4);
+      case CategoryNames.donasiSosial:
+        return _make(AppIcons.heartHandshake, 0xFB7185);
+      case CategoryNames.belanja:
+        return _make(AppIcons.shoppingBag, 0xF97316);
       default:
-        return CategoryStyle(
-          icon: AppIcons.tag,
-          color: const Color(0xFF64748B),
-          tint: const Color(0x1F64748B),
-        );
+        return _make(AppIcons.tag, 0x64748B);
     }
   }
 }

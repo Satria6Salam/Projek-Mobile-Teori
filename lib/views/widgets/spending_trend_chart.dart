@@ -41,9 +41,8 @@ class _SpendingTrendChartState extends State<SpendingTrendChart> {
       );
     }
 
-    final int? selected = (_selected != null && _selected! < data.length)
-        ? _selected
-        : null;
+    final int? selected =
+        (_selected != null && _selected! < data.length) ? _selected : null;
     final String caption = selected == null
         ? 'Ketuk batang untuk melihat rincian harian'
         : 'Tgl ${data[selected].day}  •  ${AppFormatters.rupiah(data[selected].amount)}';
@@ -57,9 +56,8 @@ class _SpendingTrendChartState extends State<SpendingTrendChart> {
             caption,
             key: ValueKey<String>(caption),
             style: textTheme.labelLarge?.copyWith(
-              color: selected == null
-                  ? AppColors.coolGray
-                  : AppColors.emeraldDeep,
+              color:
+                  selected == null ? AppColors.coolGray : AppColors.emeraldDeep,
             ),
           ),
         ),

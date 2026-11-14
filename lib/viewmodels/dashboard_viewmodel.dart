@@ -13,6 +13,9 @@ import '../services/insight_service.dart';
 import 'auth_viewmodel.dart';
 import 'safe_change_notifier.dart';
 
+/// Urutan daftar riwayat transaksi.
+enum HistorySort { newest, oldest, highest, lowest }
+
 /// Mengambil ringkasan, rekap kategori, tren bulanan/tahunan, dan analisis perilaku
 /// pengeluaran untuk Dasbor. Periode dapat berupa hari, bulan, atau tahun.
 /// Otomatis memuat ulang saat pengguna berganti, dan mengosongkan data saat logout.
@@ -57,6 +60,12 @@ class DashboardViewModel extends ChangeNotifier with SafeChangeNotifier {
   SpendingAnalytics _analytics = const SpendingAnalytics();
   TrendAnalytics _trends = const TrendAnalytics();
 
+  // Penyaringan riwayat.
+  Map<int, Map<int, double>> _categoryAmounts = <int, Map<int, double>>{};
+  final Set<int> _categoryFilter = <int>{};
+  String _searchQuery = '';
+  HistorySort _sort = HistorySort.newest;
+
   int _loadToken = 0;
   int? _loadedUserId;
 
@@ -84,6 +93,116 @@ class DashboardViewModel extends ChangeNotifier with SafeChangeNotifier {
 
   /// Tren bulanan (pada tahun periode terpilih) dan tren tahunan.
   TrendAnalytics get trends => _trends;
+
+  // ------------------------------------------------ penyaringan riwayat
+
+  /// Kategori yang dipilih sebagai filter (kosong = semua kategori).
+  Set<int> get categoryFilter => Set<int>.unmodifiable(_categoryFilter);
+  bool get hasCategoryFilter => _categoryFilter.isNotEmpty;
+  String get searchQuery => _searchQuery;
+  HistorySort get sort => _sort;
+  bool get hasActiveFilter =>
+      _categoryFilter.isNotEmpty || _searchQuery.isNotEmpty;
+
+  /// Jumlah pengeluaran sebuah transaksi pada kategori yang dipilih filter
+  /// (tanpa filter: total transaksi).
+  double filteredAmountOf(TransactionModel t) {
+    if (_categoryFilter.isEmpty) return t.totalAmount;
+    final Map<int, double>? byCategory = _categoryAmounts[t.id];
+    if (byCategory == null) {
+      return _categoryFilter.contains(t.categoryId) ? t.totalAmount : 0;
+    }
+    double sum = 0;
+    for (final int id in _categoryFilter) {
+      sum += byCategory[id] ?? 0;
+    }
+    return sum;
+  }
+
+  /// Jumlah kategori berbeda pada sebuah transaksi (untuk lencana "+N kategori").
+  int categoryCountOf(TransactionModel t) {
+    final int? count = _categoryAmounts[t.id]?.length;
+    return count ?? 1;
+  }
+
+  /// Riwayat setelah pencarian, filter kategori, dan pengurutan diterapkan.
+  List<TransactionModel> get filteredTransactions {
+    final String query = _searchQuery.trim().toLowerCase();
+    final List<TransactionModel> result =
+        _transactions.where((TransactionModel t) {
+      if (query.isNotEmpty && !t.merchantName.toLowerCase().contains(query)) {
+        return false;
+      }
+      if (_categoryFilter.isNotEmpty && filteredAmountOf(t) <= 0) return false;
+      return true;
+    }).toList();
+
+    int byDate(TransactionModel a, TransactionModel b) {
+      final int c = a.transactionDate.compareTo(b.transactionDate);
+      return c != 0 ? c : (a.id ?? 0).compareTo(b.id ?? 0);
+    }
+
+    switch (_sort) {
+      case HistorySort.newest:
+        result.sort((TransactionModel a, TransactionModel b) => byDate(b, a));
+      case HistorySort.oldest:
+        result.sort(byDate);
+      case HistorySort.highest:
+        result.sort(
+          (TransactionModel a, TransactionModel b) =>
+              filteredAmountOf(b).compareTo(filteredAmountOf(a)),
+        );
+      case HistorySort.lowest:
+        result.sort(
+          (TransactionModel a, TransactionModel b) =>
+              filteredAmountOf(a).compareTo(filteredAmountOf(b)),
+        );
+    }
+    return result;
+  }
+
+  /// Total pengeluaran pada hasil penyaringan (memakai jumlah per kategori bila difilter).
+  double get filteredTotal => filteredTransactions.fold<double>(
+        0,
+        (double sum, TransactionModel t) => sum + filteredAmountOf(t),
+      );
+
+  void toggleCategoryFilter(int categoryId) {
+    if (!_categoryFilter.remove(categoryId)) _categoryFilter.add(categoryId);
+    safeNotify();
+  }
+
+  void setCategoryFilter(Set<int> ids) {
+    _categoryFilter
+      ..clear()
+      ..addAll(ids);
+    safeNotify();
+  }
+
+  void clearCategoryFilter() {
+    if (_categoryFilter.isEmpty) return;
+    _categoryFilter.clear();
+    safeNotify();
+  }
+
+  void setSearchQuery(String value) {
+    if (value == _searchQuery) return;
+    _searchQuery = value;
+    safeNotify();
+  }
+
+  void setSort(HistorySort value) {
+    if (value == _sort) return;
+    _sort = value;
+    safeNotify();
+  }
+
+  /// Menghapus pencarian dan filter kategori.
+  void clearFilters() {
+    _categoryFilter.clear();
+    _searchQuery = '';
+    safeNotify();
+  }
 
   /// Tahun yang memiliki data, terbaru lebih dulu (untuk pilihan cepat).
   List<int> get availableYears {
@@ -150,6 +269,9 @@ class DashboardViewModel extends ChangeNotifier with SafeChangeNotifier {
           .getBetween(userId, period.start, period.endExclusive);
       final List<TransactionModel> previousItems = await _transactionRepository
           .getBetween(userId, previous.start, previous.endExclusive);
+      final Map<int, Map<int, double>> amounts =
+          await _transactionRepository.getCategoryAmountsByTransaction(
+              userId, period.start, period.endExclusive);
 
       final SpendingAnalytics analytics = _insightService.analyzePeriod(
         period: period,
@@ -181,6 +303,11 @@ class DashboardViewModel extends ChangeNotifier with SafeChangeNotifier {
       _transactions = items;
       _analytics = analytics;
       _trends = trends;
+      _categoryAmounts = amounts;
+      // Buang filter kategori yang tidak ada pada periode ini.
+      final Set<int> present =
+          summaries.map((CategorySummaryModel s) => s.categoryId).toSet();
+      _categoryFilter.removeWhere((int id) => !present.contains(id));
     } catch (_) {
       if (token != _loadToken) return;
       _errorMessage = 'Gagal memuat data keuangan. Silakan coba lagi.';
@@ -283,6 +410,9 @@ class DashboardViewModel extends ChangeNotifier with SafeChangeNotifier {
     _transactions = <TransactionModel>[];
     _analytics = const SpendingAnalytics();
     _trends = const TrendAnalytics();
+    _categoryAmounts = <int, Map<int, double>>{};
+    _categoryFilter.clear();
+    _searchQuery = '';
     _isLoading = false;
     _errorMessage = null;
   }

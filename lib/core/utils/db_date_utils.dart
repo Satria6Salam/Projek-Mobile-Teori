@@ -18,5 +18,6 @@ class DbDateUtils {
   }
 
   /// Seperti [tryParse], tetapi memakai waktu sekarang bila gagal.
-  static DateTime parseOrNow(Object? value) => tryParse(value) ?? DateTime.now();
+  static DateTime parseOrNow(Object? value) =>
+      tryParse(value) ?? DateTime.now();
 }

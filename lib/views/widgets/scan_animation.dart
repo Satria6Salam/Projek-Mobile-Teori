@@ -58,7 +58,7 @@ class _ScanAnimationState extends State<ScanAnimation>
         borderRadius: BorderRadius.circular(AppRadius.card),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x2210B981),
+            color: Color(0x2216855A),
             blurRadius: 24,
             offset: Offset(0, 10),
           ),
@@ -100,7 +100,7 @@ class _ScanAnimationState extends State<ScanAnimation>
                 borderRadius: BorderRadius.circular(2),
                 boxShadow: const [
                   BoxShadow(
-                    color: Color(0x8810B981),
+                    color: Color(0x8816855A),
                     blurRadius: 10,
                     spreadRadius: 1,
                   ),

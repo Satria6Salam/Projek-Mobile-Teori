@@ -63,8 +63,8 @@ class _AnimatedBackdropState extends State<AnimatedBackdrop>
                       left: -70 + 40 * t,
                       child: const _Glow(
                         size: 280,
-                        inner: Color(0x3310B981),
-                        outer: Color(0x0010B981),
+                        inner: Color(0x3316855A),
+                        outer: Color(0x0016855A),
                       ),
                     ),
                     Positioned(

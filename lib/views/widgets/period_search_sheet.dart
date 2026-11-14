@@ -121,7 +121,8 @@ class _PeriodSearchSheetState extends State<_PeriodSearchSheet> {
     final List<int> years = dash.availableYears;
 
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         decoration: const BoxDecoration(
           color: AppColors.white,
@@ -403,4 +404,3 @@ class _SmallChip extends StatelessWidget {
     );
   }
 }
-

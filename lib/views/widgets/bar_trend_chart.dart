@@ -59,7 +59,8 @@ class _BarTrendChartState extends State<BarTrendChart> {
       return SizedBox(
         height: widget.height,
         child: Center(
-          child: Text('Belum ada data untuk ditampilkan', style: textTheme.bodySmall),
+          child: Text('Belum ada data untuk ditampilkan',
+              style: textTheme.bodySmall),
         ),
       );
     }

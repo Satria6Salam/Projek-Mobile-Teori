@@ -48,8 +48,8 @@ class ParsedReceiptRepository {
       throw const RepositoryException('ID hasil parsing tidak ditemukan');
     }
     final Database db = await _db;
-    final Map<String, Object?> values =
-        Map<String, Object?>.of(parsed.toMap())..remove(ParsedCols.id);
+    final Map<String, Object?> values = Map<String, Object?>.of(parsed.toMap())
+      ..remove(ParsedCols.id);
     final int count = await db.update(
       DbTables.parsedReceipts,
       values,

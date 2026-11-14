@@ -38,7 +38,8 @@ class _FadeSlideInState extends State<FadeSlideIn>
       curve: Curves.easeOutCubic,
     );
     _opacity = curve;
-    _slide = Tween<Offset>(begin: widget.offset, end: Offset.zero).animate(curve);
+    _slide =
+        Tween<Offset>(begin: widget.offset, end: Offset.zero).animate(curve);
 
     if (widget.delay == Duration.zero) {
       _controller.forward();

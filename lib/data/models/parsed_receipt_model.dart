@@ -42,7 +42,8 @@ class ParsedReceiptModel {
       if (id != null) ParsedCols.id: id,
       ParsedCols.ocrId: ocrId,
       ParsedCols.merchantName: merchantName,
-      ParsedCols.transactionDate: date == null ? null : DbDateUtils.dateToDb(date),
+      ParsedCols.transactionDate:
+          date == null ? null : DbDateUtils.dateToDb(date),
       ParsedCols.totalAmount: totalAmount,
       ParsedCols.status: parsingStatus,
       ParsedCols.createdAt: DbDateUtils.dateTimeToDb(createdAt),

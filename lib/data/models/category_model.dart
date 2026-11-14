@@ -8,6 +8,9 @@ class CategoryModel {
     required this.name,
     this.description,
     required this.createdAt,
+    this.iconKey,
+    this.colorValue,
+    this.isHidden = false,
   });
 
   final int? id;
@@ -15,12 +18,24 @@ class CategoryModel {
   final String? description;
   final DateTime createdAt;
 
+  /// Kunci ikon dari [CategoryPalette] (null = ikon bawaan).
+  final String? iconKey;
+
+  /// Warna RGB (0xRRGGBB), null = warna bawaan.
+  final int? colorValue;
+
+  /// Kategori yang disembunyikan tidak muncul saat memilih kategori barang.
+  final bool isHidden;
+
   factory CategoryModel.fromMap(Map<String, Object?> map) {
     return CategoryModel(
       id: map[CategoryCols.id] as int?,
       name: map[CategoryCols.name] as String? ?? '',
       description: map[CategoryCols.description] as String?,
       createdAt: DbDateUtils.parseOrNow(map[CategoryCols.createdAt]),
+      iconKey: map[CategoryCols.iconKey] as String?,
+      colorValue: map[CategoryCols.colorValue] as int?,
+      isHidden: (map[CategoryCols.isHidden] as int? ?? 0) == 1,
     );
   }
 
@@ -30,6 +45,9 @@ class CategoryModel {
       CategoryCols.name: name,
       CategoryCols.description: description,
       CategoryCols.createdAt: DbDateUtils.dateTimeToDb(createdAt),
+      CategoryCols.iconKey: iconKey,
+      CategoryCols.colorValue: colorValue,
+      CategoryCols.isHidden: isHidden ? 1 : 0,
     };
   }
 
@@ -38,12 +56,18 @@ class CategoryModel {
     String? name,
     String? description,
     DateTime? createdAt,
+    String? iconKey,
+    int? colorValue,
+    bool? isHidden,
   }) {
     return CategoryModel(
       id: id ?? this.id,
       name: name ?? this.name,
       description: description ?? this.description,
       createdAt: createdAt ?? this.createdAt,
+      iconKey: iconKey ?? this.iconKey,
+      colorValue: colorValue ?? this.colorValue,
+      isHidden: isHidden ?? this.isHidden,
     );
   }
 }

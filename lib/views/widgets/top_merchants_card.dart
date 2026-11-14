@@ -99,7 +99,8 @@ class _MerchantRow extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         TweenAnimationBuilder<double>(
-          tween: Tween<double>(begin: 0, end: fraction.clamp(0.0, 1.0).toDouble()),
+          tween:
+              Tween<double>(begin: 0, end: fraction.clamp(0.0, 1.0).toDouble()),
           duration: const Duration(milliseconds: 800),
           curve: Curves.easeOutCubic,
           builder: (BuildContext context, double value, Widget? child) {
@@ -109,7 +110,8 @@ class _MerchantRow extends StatelessWidget {
                 value: value,
                 minHeight: 5,
                 backgroundColor: AppColors.border,
-                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.emerald),
+                valueColor:
+                    const AlwaysStoppedAnimation<Color>(AppColors.emerald),
               ),
             );
           },

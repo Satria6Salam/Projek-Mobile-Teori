@@ -21,7 +21,8 @@ class ImageStorageService {
         p.extension(sourcePath).isEmpty ? '.jpg' : p.extension(sourcePath);
     final String fileName =
         'receipt_${DateTime.now().microsecondsSinceEpoch}$extension';
-    final File saved = await File(sourcePath).copy(p.join(folder.path, fileName));
+    final File saved =
+        await File(sourcePath).copy(p.join(folder.path, fileName));
     return saved.path;
   }
 

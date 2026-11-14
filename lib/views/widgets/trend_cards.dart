@@ -75,9 +75,7 @@ class MonthlyTrendCard extends StatelessWidget {
                   Expanded(
                     child: _MiniStat(
                       label: 'Bulan tertinggi',
-                      value: peak == null
-                          ? '-'
-                          : AppFormatters.monthName(peak),
+                      value: peak == null ? '-' : AppFormatters.monthName(peak),
                     ),
                   ),
                 ],
@@ -168,7 +166,9 @@ class YearlyTrendCard extends StatelessWidget {
                           : '${yoy >= 0 ? '+' : '-'}${yoy.abs().round()}%',
                       valueColor: yoy == null
                           ? AppColors.slateDark
-                          : (yoy >= 0 ? AppColors.warningDeep : AppColors.emeraldDeep),
+                          : (yoy >= 0
+                              ? AppColors.warningDeep
+                              : AppColors.emeraldDeep),
                     ),
                   ),
                 ],

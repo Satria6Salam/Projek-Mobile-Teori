@@ -58,13 +58,11 @@ class ImagePickerService {
           );
           return image?.path;
         case ScanSource.file:
-          final FilePickerResult? result = await FilePicker.platform.pickFiles(
+          final PlatformFile? file = await FilePicker.pickFile(
             type: FileType.custom,
             allowedExtensions: ImageFormatService.supportedExtensions,
-            allowMultiple: false,
           );
-          if (result == null || result.files.isEmpty) return null;
-          return result.files.single.path;
+          return file?.path;
       }
     } on PlatformException {
       throw const ImagePickException(
