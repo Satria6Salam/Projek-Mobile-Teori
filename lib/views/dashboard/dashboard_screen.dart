@@ -165,9 +165,9 @@ class DashboardScreen extends StatelessWidget {
                             onTap: () => context.push(AppRoutes.budget),
                           ),
                           QuickAction(
-                            icon: AppIcons.tags,
-                            label: 'Kategori',
-                            onTap: () => context.push(AppRoutes.categories),
+                            icon: AppIcons.shoppingCart,
+                            label: 'Rencana',
+                            onTap: () => context.push(AppRoutes.shoppingPlan),
                           ),
                         ],
                       ),

@@ -8,6 +8,11 @@ class AppIcons {
 
   static IconData get eye => LucideIcons.eye;
   static IconData get bell => LucideIcons.bell;
+  static IconData get shoppingCart => LucideIcons.shoppingCart;
+  static IconData get listChecks => LucideIcons.listChecks;
+  static IconData get circleCheck => LucideIcons.circleCheck;
+  static IconData get circle => LucideIcons.circle;
+  static IconData get undo => LucideIcons.undo2;
   static IconData get piggyBank => LucideIcons.piggyBank;
   static IconData get pieChart => LucideIcons.chartPie;
   static IconData get penLine => LucideIcons.penLine;

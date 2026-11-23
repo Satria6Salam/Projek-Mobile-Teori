@@ -6,6 +6,7 @@ import '../../views/analysis/analysis_screen.dart';
 import '../../views/auth/login_screen.dart';
 import '../../views/auth/register_screen.dart';
 import '../../views/budget/budget_screen.dart';
+import '../../views/plan/shopping_plan_screen.dart';
 import '../../views/category/category_management_screen.dart';
 import '../../views/dashboard/dashboard_screen.dart';
 import '../../views/profile/data_tools_screen.dart';
@@ -160,6 +161,11 @@ class AppRouter {
           path: AppRoutes.notifications,
           pageBuilder: (context, state) =>
               _page(state, const NotificationSettingsScreen()),
+        ),
+        GoRoute(
+          path: AppRoutes.shoppingPlan,
+          pageBuilder: (context, state) =>
+              _page(state, const ShoppingPlanScreen()),
         ),
         GoRoute(
           path: AppRoutes.dataTools,

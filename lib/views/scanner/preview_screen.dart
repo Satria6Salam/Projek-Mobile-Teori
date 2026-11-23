@@ -77,11 +77,26 @@ class _PreviewScreenState extends State<PreviewScreen> {
     final ScanViewModel scan = context.read<ScanViewModel>();
     FocusScope.of(context).unfocus();
 
+    final GoRouter router = GoRouter.of(context);
     final bool ok = await scan.saveTransaction();
     if (!mounted || !ok) return;
 
+    final List<String> planned = scan.lastPlanMatches;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Transaksi berhasil disimpan')),
+      SnackBar(
+        content: Text(
+          planned.isEmpty
+              ? 'Transaksi berhasil disimpan'
+              : 'Transaksi tersimpan. ${planned.length} barang rencana '
+                  'sudah dibeli: ${planned.join(', ')}',
+        ),
+        action: planned.isEmpty
+            ? null
+            : SnackBarAction(
+                label: 'Lihat',
+                onPressed: () => router.push(AppRoutes.shoppingPlan),
+              ),
+      ),
     );
     context.go(AppRoutes.dashboard);
   }

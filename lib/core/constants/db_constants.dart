@@ -3,7 +3,7 @@ class DbConstants {
   DbConstants._();
 
   static const String databaseName = 'smartreceipt.db';
-  static const int databaseVersion = 5;
+  static const int databaseVersion = 6;
 }
 
 /// Nama tabel.
@@ -20,6 +20,7 @@ class DbTables {
   static const String transactionItems = 'transaction_items';
   static const String budgets = 'budgets';
   static const String recurringTransactions = 'recurring_transactions';
+  static const String shoppingPlans = 'shopping_plans';
 }
 
 /// Kolom tabel users.
@@ -199,4 +200,29 @@ class RecurringCols {
   static const String isActive = 'is_active';
   static const String notes = 'notes';
   static const String createdAt = 'created_at';
+}
+
+/// Kolom tabel shopping_plans (rencana belanja).
+class PlanCols {
+  PlanCols._();
+
+  static const String id = 'plan_id';
+  static const String userId = 'user_id';
+  static const String name = 'name';
+  static const String quantity = 'quantity';
+  static const String note = 'note';
+  static const String status = 'status';
+  static const String createdAt = 'created_at';
+  static const String boughtAt = 'bought_at';
+  static const String transactionId = 'transaction_id';
+  static const String boughtName = 'bought_name';
+  static const String boughtPrice = 'bought_price';
+}
+
+/// Status barang rencana belanja.
+class PlanStatus {
+  PlanStatus._();
+
+  static const String pending = 'pending';
+  static const String bought = 'bought';
 }

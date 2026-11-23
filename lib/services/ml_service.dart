@@ -92,7 +92,7 @@ class MlService {
       : _trainingData = trainingData ?? MlTrainingData.data;
 
   static const String modelName = 'Multinomial Naive Bayes';
-  static const String modelVersion = '4.0.0';
+  static const String modelVersion = '4.1.0';
   static const String fallbackCategory = MlTrainingData.lainnya;
 
   /// Di bawah nilai ini, hasil ditandai "perlu dicek" (isConfident = false).
@@ -269,7 +269,12 @@ class MlService {
   List<String> tokenize(String text) {
     final List<String> result = <String>[];
     for (final String word in _rawTokens(text)) {
-      result.add(_correct(word));
+      final String corrected = _correct(word);
+      if (corrected.contains(' ')) {
+        result.addAll(corrected.split(' '));
+      } else {
+        result.add(corrected);
+      }
     }
     return result;
   }
@@ -304,14 +309,78 @@ class MlService {
   /// suntingan (hapus/tambah/ganti/tukar satu huruf). Kata yang paling sering
   /// muncul di data latih dipilih; bila tidak ada yang cocok, kata dibiarkan.
   String _correct(String word) {
-    if (word.length < _minCorrectionLength ||
-        _wordDocFreq.isEmpty ||
-        _wordDocFreq.containsKey(word)) {
-      return word;
-    }
+    if (_wordDocFreq.isEmpty || _wordDocFreq.containsKey(word)) return word;
     final String? cached = _correctionCache[word];
     if (cached != null) return cached;
 
+    String result = word;
+    if (word.length >= _minCorrectionLength) result = _correctOneEdit(word);
+    if (result == word) result = _expandSkeleton(word) ?? word;
+    if (result == word) result = _splitCompound(word) ?? word;
+    _correctionCache[word] = result;
+    return result;
+  }
+
+  static final RegExp _vowels = RegExp(r'[aeiou]');
+
+  /// Singkatan tanpa huruf vokal khas struk ("slvqn", "prkr", "snslk"):
+  /// dicari kata kosakata yang diawali & diakhiri huruf sama dan memuat
+  /// seluruh huruf singkatan secara berurutan. Yang paling sering dipilih.
+  String? _expandSkeleton(String word) {
+    // Huruf pertama boleh vokal ("aym" -> "ayam"); sisanya tanpa vokal.
+    if (word.length < 3 || _vowels.hasMatch(word.substring(1))) return null;
+    final int first = word.codeUnitAt(0);
+    final int last = word.codeUnitAt(word.length - 1);
+    final int maxLength = (word.length * 2.6).ceil() + 1;
+    String? best;
+    int bestFreq = 0;
+    _wordDocFreq.forEach((String candidate, int freq) {
+      if (candidate.length <= word.length ||
+          candidate.length > maxLength ||
+          candidate.codeUnitAt(0) != first ||
+          candidate.codeUnitAt(candidate.length - 1) != last ||
+          !_isSubsequence(word, candidate)) {
+        return;
+      }
+      if (freq > bestFreq ||
+          (freq == bestFreq &&
+              best != null &&
+              candidate.length < best!.length)) {
+        best = candidate;
+        bestFreq = freq;
+      }
+    });
+    return best;
+  }
+
+  bool _isSubsequence(String short, String long) {
+    int j = 0;
+    for (int i = 0; i < long.length && j < short.length; i++) {
+      if (long.codeUnitAt(i) == short.codeUnitAt(j)) j++;
+    }
+    return j == short.length;
+  }
+
+  /// Kata gabungan tanpa spasi ("ultramilk" -> "ultra milk").
+  String? _splitCompound(String word) {
+    if (word.length < 7) return null;
+    String? best;
+    int bestScore = 0;
+    for (int i = 3; i <= word.length - 3; i++) {
+      final int left = _wordDocFreq[word.substring(0, i)] ?? 0;
+      final int right = _wordDocFreq[word.substring(i)] ?? 0;
+      if (left == 0 || right == 0) continue;
+      final int score = left < right ? left : right;
+      if (score > bestScore) {
+        bestScore = score;
+        best = '${word.substring(0, i)} ${word.substring(i)}';
+      }
+    }
+    return best;
+  }
+
+  /// Koreksi satu suntingan terhadap kosakata (lihat [_correct]).
+  String _correctOneEdit(String word) {
     String best = word;
     int bestFreq = 0;
     final int first = word.codeUnitAt(0);
@@ -335,7 +404,6 @@ class MlService {
         }
       }
     }
-    _correctionCache[word] = best;
     return best;
   }
 

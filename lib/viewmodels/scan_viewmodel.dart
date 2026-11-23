@@ -22,6 +22,7 @@ import '../services/ml_training_data.dart';
 import '../services/ocr_service.dart';
 import '../services/parsing_service.dart';
 import '../services/receipt_selector.dart';
+import '../services/shopping_plan_service.dart';
 import 'auth_viewmodel.dart';
 import 'safe_change_notifier.dart';
 
@@ -146,8 +147,10 @@ class ScanViewModel extends ChangeNotifier with SafeChangeNotifier {
     required ImagePickerService imagePickerService,
     ImageEnhancementService? imageEnhancementService,
     ReceiptSelector receiptSelector = const ReceiptSelector(),
+    ShoppingPlanService? shoppingPlanService,
     this.onTransactionSaved,
   })  : _auth = authViewModel,
+        _planService = shoppingPlanService,
         _enhancementService = imageEnhancementService,
         _selector = receiptSelector,
         _ocrService = ocrService,
@@ -181,6 +184,12 @@ class ScanViewModel extends ChangeNotifier with SafeChangeNotifier {
   final ReceiptSelector _selector;
   final ImageFormatService _imageFormatService;
   final ImagePickerService _pickerService;
+  final ShoppingPlanService? _planService;
+
+  List<String> _lastPlanMatches = const <String>[];
+
+  /// Nama barang rencana belanja yang tercoret oleh struk terakhir yang disimpan.
+  List<String> get lastPlanMatches => _lastPlanMatches;
 
   /// Dipanggil setelah transaksi tersimpan (misalnya untuk memuat ulang Dasbor).
   final VoidCallback? onTransactionSaved;
@@ -739,7 +748,8 @@ class ScanViewModel extends ChangeNotifier with SafeChangeNotifier {
         updatedAt: now,
       );
 
-      await _transactionRepository.saveScanTransaction(
+      final TransactionModel saved =
+          await _transactionRepository.saveScanTransaction(
         ocr: ocr,
         parsed: parsed,
         classification: classification,
@@ -748,6 +758,7 @@ class ScanViewModel extends ChangeNotifier with SafeChangeNotifier {
         items: items,
       );
 
+      _lastPlanMatches = await _markPlannedItems(userId, saved, items);
       _draft = null;
       _formErrors.clear();
       _status = ScanStatus.saved;
@@ -763,6 +774,35 @@ class ScanViewModel extends ChangeNotifier with SafeChangeNotifier {
       _errorMessage = 'Gagal menyimpan transaksi. Silakan coba lagi.';
       safeNotify();
       return false;
+    }
+  }
+
+  /// Mencoret rencana belanja yang cocok dengan barang pada struk.
+  /// Kegagalan di sini tidak membatalkan transaksi yang sudah tersimpan.
+  Future<List<String>> _markPlannedItems(
+    int userId,
+    TransactionModel saved,
+    List<TransactionItemModel> items,
+  ) async {
+    final ShoppingPlanService? service = _planService;
+    if (service == null || items.isEmpty) return const <String>[];
+    try {
+      final List<PlanMatch> matches = await service.markPurchasedFromReceipt(
+        userId: userId,
+        transactionId: saved.id,
+        purchasedAt: saved.transactionDate,
+        lines: <PurchasedLine>[
+          for (final TransactionItemModel item in items)
+            PurchasedLine(
+              name: item.name,
+              quantity: item.quantity,
+              totalPrice: item.totalPrice,
+            ),
+        ],
+      );
+      return matches.map((PlanMatch m) => m.plan.name).toList();
+    } catch (_) {
+      return const <String>[];
     }
   }
 

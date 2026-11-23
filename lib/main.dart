@@ -14,6 +14,7 @@ import 'data/database/app_database.dart';
 import 'core/theme/category_palette.dart';
 import 'data/models/category_model.dart';
 import 'data/repositories/budget_repository.dart';
+import 'data/repositories/shopping_plan_repository.dart';
 import 'data/repositories/category_repository.dart';
 import 'data/repositories/recurring_repository.dart';
 import 'data/repositories/ml_classification_repository.dart';
@@ -23,6 +24,7 @@ import 'data/repositories/session_repository.dart';
 import 'data/repositories/transaction_repository.dart';
 import 'data/repositories/user_repository.dart';
 import 'services/budget_service.dart';
+import 'services/shopping_plan_service.dart';
 import 'services/export_service.dart';
 import 'services/image_enhancement_service.dart';
 import 'services/image_format_service.dart';
@@ -36,6 +38,7 @@ import 'services/recurring_service.dart';
 import 'services/reminder_coordinator.dart';
 import 'viewmodels/auth_viewmodel.dart';
 import 'viewmodels/budget_viewmodel.dart';
+import 'viewmodels/shopping_plan_viewmodel.dart';
 import 'viewmodels/category_management_viewmodel.dart';
 import 'viewmodels/data_tools_viewmodel.dart';
 import 'viewmodels/manual_entry_viewmodel.dart';
@@ -65,6 +68,8 @@ Future<void> main() async {
   final SessionRepository sessionRepository = SessionRepository();
   final BudgetRepository budgetRepository = BudgetRepository();
   final RecurringRepository recurringRepository = RecurringRepository();
+  final ShoppingPlanRepository shoppingPlanRepository =
+      ShoppingPlanRepository();
 
   // Ikon dan warna kustom kategori dimuat sebelum tampilan pertama.
   CategoryPalette.applyTo(await categoryRepository.getAll());
@@ -100,6 +105,12 @@ Future<void> main() async {
   final ExportService exportService = ExportService(
     transactions: transactionRepository,
   );
+  // Rencana belanja: dicocokkan dengan tokenizer model AI agar singkatan
+  // struk ("TLR AYM") tetap cocok dengan rencana ("Telur ayam").
+  final ShoppingPlanService shoppingPlanService = ShoppingPlanService(
+    repository: shoppingPlanRepository,
+    matcher: ShoppingMatcher(tokenizer: mlService.tokenize),
+  );
 
   // ViewModel.
   final AuthViewModel authViewModel = AuthViewModel(
@@ -115,6 +126,10 @@ Future<void> main() async {
     ocrResultRepository: ocrResultRepository,
     imageStorageService: imageStorageService,
   );
+  final ShoppingPlanViewModel shoppingPlanViewModel = ShoppingPlanViewModel(
+    authViewModel: authViewModel,
+    repository: shoppingPlanRepository,
+  );
   final ScanViewModel scanViewModel = ScanViewModel(
     authViewModel: authViewModel,
     ocrService: ocrService,
@@ -126,8 +141,10 @@ Future<void> main() async {
     imageFormatService: imageFormatService,
     imagePickerService: imagePickerService,
     imageEnhancementService: imageEnhancementService,
+    shoppingPlanService: shoppingPlanService,
     onTransactionSaved: () {
       dashboardViewModel.loadDashboard();
+      unawaited(shoppingPlanViewModel.load());
       final int? userId = authViewModel.currentUser?.id;
       if (userId != null) {
         unawaited(budgetService.checkAndNotify(userId));
@@ -227,6 +244,9 @@ Future<void> main() async {
         ChangeNotifierProvider<ScanViewModel>.value(value: scanViewModel),
         ChangeNotifierProvider<ProfileViewModel>.value(value: profileViewModel),
         ChangeNotifierProvider<BudgetViewModel>.value(value: budgetViewModel),
+        ChangeNotifierProvider<ShoppingPlanViewModel>.value(
+          value: shoppingPlanViewModel,
+        ),
         ChangeNotifierProvider<ManualEntryViewModel>.value(
           value: manualEntryViewModel,
         ),

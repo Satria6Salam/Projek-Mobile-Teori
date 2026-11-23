@@ -163,6 +163,34 @@ CREATE TABLE ${DbTables.recurringTransactions} (
     ON DELETE RESTRICT
 )''';
 
+  static const String createShoppingPlans = '''
+CREATE TABLE ${DbTables.shoppingPlans} (
+  ${PlanCols.id} INTEGER PRIMARY KEY AUTOINCREMENT,
+  ${PlanCols.userId} INTEGER NOT NULL,
+  ${PlanCols.name} TEXT NOT NULL,
+  ${PlanCols.quantity} REAL NOT NULL DEFAULT 1,
+  ${PlanCols.note} TEXT,
+  ${PlanCols.status} TEXT NOT NULL DEFAULT '${PlanStatus.pending}',
+  ${PlanCols.createdAt} TEXT NOT NULL,
+  ${PlanCols.boughtAt} TEXT,
+  ${PlanCols.transactionId} INTEGER,
+  ${PlanCols.boughtName} TEXT,
+  ${PlanCols.boughtPrice} REAL,
+  FOREIGN KEY (${PlanCols.userId}) REFERENCES ${DbTables.users}(${UserCols.id})
+    ON DELETE CASCADE,
+  FOREIGN KEY (${PlanCols.transactionId}) REFERENCES ${DbTables.transactions}(${TransCols.id})
+    ON DELETE SET NULL
+)''';
+
+  static const String createShoppingPlansIndex =
+      'CREATE INDEX idx_plans_user_status ON ${DbTables.shoppingPlans}(${PlanCols.userId}, ${PlanCols.status})';
+
+  /// Perubahan skema dari versi 5 ke versi 6 (rencana belanja).
+  static const List<String> upgradeToV6 = <String>[
+    createShoppingPlans,
+    createShoppingPlansIndex,
+  ];
+
   /// Perubahan skema dari versi 4 ke versi 5.
   static const List<String> upgradeToV5 = <String>[
     'ALTER TABLE ${DbTables.categories} ADD COLUMN ${CategoryCols.iconKey} TEXT',
@@ -179,6 +207,7 @@ CREATE TABLE ${DbTables.recurringTransactions} (
     'CREATE INDEX idx_trans_category ON ${DbTables.transactions}(${TransCols.categoryId})',
     'CREATE INDEX idx_items_transaction ON ${DbTables.transactionItems}(${ItemCols.transactionId})',
     'CREATE INDEX idx_items_category ON ${DbTables.transactionItems}(${ItemCols.categoryId})',
+    createShoppingPlansIndex,
   ];
 
   /// Perubahan skema dari versi 1 ke versi 2 (tabel rincian barang).
@@ -200,6 +229,7 @@ CREATE TABLE ${DbTables.recurringTransactions} (
     createTransactionItems,
     createBudgets,
     createRecurringTransactions,
+    createShoppingPlans,
   ];
 
   /// Kategori awal (label kelas Naive Bayes), 15 kategori.

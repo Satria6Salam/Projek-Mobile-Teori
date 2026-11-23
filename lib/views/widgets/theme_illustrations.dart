@@ -18,6 +18,7 @@ enum ThemeArtKind {
   history,
   profile,
   scan,
+  cart,
 }
 
 /// Ilustrasi animasi: melayang terus-menerus, dan masuk sekali saat tampil.
@@ -217,6 +218,8 @@ class _ArtPainter extends CustomPainter {
         _profile(canvas);
       case ThemeArtKind.scan:
         _scan(canvas, wave);
+      case ThemeArtKind.cart:
+        _cart(canvas, wave);
     }
     canvas.restore();
   }
@@ -542,6 +545,74 @@ class _ArtPainter extends CustomPainter {
       final double dy = o.dy < 48 ? g : -g;
       c.drawLine(o, o + Offset(dx, 0), corner);
       c.drawLine(o, o + Offset(0, dy), corner);
+    }
+  }
+
+  void _cart(Canvas c, double wave) {
+    // Troli belanja yang bergoyang, barang masuk satu per satu, dan centang.
+    c.save();
+    c.translate((1 - enter) * -20 + wave * 1.5, 0);
+    final Paint frame = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..color = _paper;
+    c.drawPath(
+      Path()
+        ..moveTo(10, 26)
+        ..lineTo(20, 26)
+        ..lineTo(28, 64)
+        ..lineTo(72, 64),
+      frame,
+    );
+    // Barang di dalam troli (masuk bergantian).
+    const List<Color> goods = <Color>[_mint, _amber, Color(0xFF7DD3FC)];
+    for (int i = 0; i < 3; i++) {
+      final double p = ((enter - 0.2 - i * 0.15) / 0.4).clamp(0.0, 1.0);
+      final double drop = (1 - Curves.easeOutBack.transform(p)) * -30;
+      final double bob = math.sin((loop + i * 0.3) * 2 * math.pi) * 1.2;
+      _rr(c, Rect.fromLTWH(30 + i * 13.0, 36 + drop + bob, 11, 18), 3,
+          goods[i].withValues(alpha: p));
+    }
+    c.drawPath(
+      Path()
+        ..moveTo(22, 32)
+        ..lineTo(78, 32)
+        ..lineTo(72, 56)
+        ..lineTo(27, 56)
+        ..close(),
+      frame..strokeWidth = 3.5,
+    );
+    final double spin = loop * 2 * math.pi;
+    for (final double x in const <double>[34, 66]) {
+      c.drawCircle(Offset(x, 74), 6, Paint()..color = _paper);
+      c.drawCircle(
+        Offset(x + math.cos(spin) * 2.5, 74 + math.sin(spin) * 2.5),
+        1.6,
+        Paint()..color = _deepEmerald,
+      );
+    }
+    c.restore();
+
+    // Lencana centang (barang rencana sudah dibeli).
+    final double tick = Curves.easeOutBack
+        .transform(((enter - 0.65) / 0.35).clamp(0.0, 1.0).toDouble());
+    if (tick > 0) {
+      const Offset o = Offset(78, 20);
+      c.drawCircle(o, 11 * tick, Paint()..color = _amber);
+      final Paint check = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round
+        ..color = _deepEmerald;
+      c.drawPath(
+        Path()
+          ..moveTo(o.dx - 5 * tick, o.dy)
+          ..lineTo(o.dx - 1 * tick, o.dy + 4 * tick)
+          ..lineTo(o.dx + 5 * tick, o.dy - 4 * tick),
+        check,
+      );
     }
   }
 

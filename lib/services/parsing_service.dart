@@ -135,7 +135,39 @@ class ParsingService {
   );
 
   /// Baris yang diakhiri kode pos 5 digit (mis. "..., KABUPATEN MALANG, 65174").
-  static final RegExp _postalCodeEnd = RegExp(r'[,\s]\s*\d{5}\s*$');
+  static final RegExp _postalCodeEnd = RegExp(r',\s*\d{5}\s*$');
+
+  /// Lima digit di ujung baris tanpa koma (mis. "MALANG 65145"). Hanya dianggap
+  /// kode pos bila berada di kepala struk (sebelum baris tanggal), karena harga
+  /// tanpa pemisah ribuan (mis. "Americano 25000") juga lima digit.
+  static final RegExp _postalCodeLoose = RegExp(r'\s\d{5}\s*$');
+
+  /// Pemandu titik/garis antara nama dan harga ("Kopi Susu.......18.000").
+  static final RegExp _leaders = RegExp(r'\.{2,}|_{2,}|-{3,}|…+|·{2,}|=');
+
+  /// Token harga yang memuat huruf mirip angka S/B/Z ("12.S00").
+  static final RegExp _priceLookalike =
+      RegExp(r'^\d[\dSBZ]*[.,][\dSBZ]{3}(?:[.,][\dSBZ]{3})*$');
+
+  /// Harga yang terpotong spasi setelah pemisah ("12. 000" -> "12.000").
+  static final RegExp _splitAfterSeparator =
+      RegExp(r'(?<![\d.,])(\d{1,3})([.,]) (\d{3})(?!\d)');
+
+  /// Ribuan yang dipisah spasi oleh OCR ("32 000", "1 250 000").
+  static final RegExp _spacedThousands =
+      RegExp(r'(?<![\d.,])(\d{1,3})((?: \d{3})+)(?![\d.,])');
+
+  /// Kata satuan jumlah yang menempel pada angka ("2 SAK", "1 KG", "3 PCS").
+  static final RegExp _qtyUnitEnd = RegExp(
+    r'(?:^|\s)(\d{1,3}(?:[.,]\d{1,2})?)\s+(?:pcs|pc|bh|buah|sak|kg|ltr|lt|btl|botol|bks|bungkus|pak|pack|box|dus|lsn|lusin|unit|porsi|psg|pasang|lbr|lembar|rim|roll|meter|mtr|m)\.?$',
+    caseSensitive: false,
+  );
+
+  /// Baris potongan harga yang melekat pada barang di atasnya.
+  static final RegExp _discountLine = RegExp(
+    r'\b(?:disc|diskon|discount|potongan|promo|hemat|voucher)\b',
+    caseSensitive: false,
+  );
 
   static final RegExp _longDigits = RegExp(r'\d{6,}');
   static final RegExp _phoneLike = RegExp(r'\d{2,4}[\s\-]\d{5,}');
@@ -235,6 +267,12 @@ class ParsingService {
     final double? total = keywordTotal ?? _fallbackTotal(lines);
     List<ParsedItem> items =
         _extractItems(lines, startIndex: merchantIndex + 1);
+    if (items.isEmpty && keywordTotal != null && keywordTotal >= _minAmount) {
+      final ParsedItem? only =
+          _singleItemFallback(lines, merchantIndex + 1, keywordTotal) ??
+              _singleItemFallback(lines, 0, keywordTotal);
+      if (only != null) items = <ParsedItem>[only];
+    }
 
     // Satu barang tidak mungkin lebih mahal dari total belanja. Baris seperti
     // itu hampir pasti salah baca (kode pos, nomor telepon, nomor transaksi).
@@ -269,10 +307,24 @@ class ParsingService {
   List<String> _splitLines(String rawText) {
     return rawText
         .split(RegExp(r'\r?\n'))
-        .map((String l) =>
-            _fixDigitLookalikes(l.replaceAll(RegExp(r'\s+'), ' ').trim()))
+        .map((String l) => _joinSpacedThousands(_fixDigitLookalikes(l
+            .replaceAll(_leaders, ' ')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim())))
         .where((String l) => l.isNotEmpty)
         .toList();
+  }
+
+  /// "Minyak Goreng 32 000" -> "Minyak Goreng 32000".
+  String _joinSpacedThousands(String line) {
+    line = line.replaceAllMapped(
+      _splitAfterSeparator,
+      (Match m) => '${m.group(1)}${m.group(2)}${m.group(3)}',
+    );
+    return line.replaceAllMapped(
+      _spacedThousands,
+      (Match m) => '${m.group(1)}${(m.group(2) ?? '').replaceAll(' ', '')}',
+    );
   }
 
   /// OCR sering salah membaca angka 0 sebagai huruf "o" dan angka 1 sebagai "l"/"I"
@@ -289,6 +341,17 @@ class ParsingService {
         return token
             .replaceAll(RegExp(r'[Oo]'), '0')
             .replaceAll(RegExp(r'[Il]'), '1');
+      }
+      // S/B/Z hanya dipulihkan pada angka berpemisah yang jelas berupa harga
+      // ("12.S00" -> "12.500", "1B.000" -> "18.000"), agar kata tidak rusak.
+      if (hasSeparator &&
+          digits >= 2 &&
+          _priceLookalike.hasMatch(token) &&
+          RegExp(r'[SBZ]').hasMatch(token)) {
+        return token
+            .replaceAll('S', '5')
+            .replaceAll('B', '8')
+            .replaceAll('Z', '2');
       }
       return token;
     }).join(' ');
@@ -516,25 +579,85 @@ class ParsingService {
 
   // ---------------------------------------------------------------- barang
 
+  /// True bila baris menandai akhir daftar barang (TOTAL/SUBTOTAL berisi
+  /// nominal). Kepala tabel seperti "Item Qty Harga Jumlah" tidak dihitung.
+  bool _isTotalBoundary(List<String> lines, int i) {
+    if (!_totalBoundary.hasMatch(lines[i])) return false;
+    if (_lastAmountInLine(lines[i]) != null) return true;
+    return i + 1 < lines.length && _isAmountOnlyLine(lines[i + 1]);
+  }
+
   List<ParsedItem> _extractItems(List<String> lines,
       {required int startIndex}) {
     int endIndex = lines.length;
     for (int i = startIndex; i < lines.length; i++) {
-      if (_totalBoundary.hasMatch(lines[i])) {
+      if (_isTotalBoundary(lines, i)) {
         endIndex = i;
         break;
       }
     }
 
+    // Kepala struk berakhir di baris tanggal pertama (bila ada).
+    int headerEnd = startIndex;
+    for (int i = startIndex; i < endIndex; i++) {
+      if (_dateFromLine(lines[i]) != null) {
+        headerEnd = i;
+        break;
+      }
+    }
+
     final List<ParsedItem> items = <ParsedItem>[];
-    String? pending; // nama barang yang harganya ada di baris berikutnya
+
+    // Nama tanpa harga dan baris harga tanpa nama yang menunggu dipasangkan.
+    // Struk berkolom sering terbaca sebagai beberapa nama dulu, lalu harganya.
+    final List<String> names = <String>[];
+    final List<_Tail> prices = <_Tail>[];
+
+    void flush() {
+      if (prices.isNotEmpty && names.isNotEmpty) {
+        final int count =
+            names.length < prices.length ? names.length : prices.length;
+        // Nama terakhir paling dekat dengan harganya; nama yang lebih awal
+        // (mis. baris cabang toko) diabaikan bila jumlahnya berlebih.
+        final List<String> usedNames = names.sublist(names.length - count);
+        for (int k = 0; k < count; k++) {
+          final ParsedItem? item =
+              _buildItem(usedNames[k], prices[k].nums, prices[k].hasMarker);
+          if (item != null) items.add(item);
+        }
+      }
+      names.clear();
+      prices.clear();
+    }
+
     for (int i = startIndex; i < endIndex; i++) {
       final String line = lines[i];
+
+      // Potongan harga: kurangi dari barang tepat di atasnya.
+      if (_discountLine.hasMatch(line) && !_totalBoundary.hasMatch(line)) {
+        flush();
+        final double? cut = _lastAmountInLine(line);
+        if (cut != null && items.isNotEmpty) {
+          final ParsedItem last = items.removeLast();
+          final double total = last.totalPrice - cut;
+          items.add(total >= _minAmount
+              ? ParsedItem(
+                  name: last.name,
+                  quantity: last.quantity,
+                  unitPrice: total / last.quantity,
+                  totalPrice: total,
+                )
+              : last);
+        }
+        continue;
+      }
+
       if (_itemExclude.hasMatch(line) ||
           _addressLike.hasMatch(line) ||
           _postalCodeEnd.hasMatch(line) ||
+          (i < headerEnd && _postalCodeLoose.hasMatch(line)) ||
           _dateFromLine(line) != null) {
-        pending = null;
+        flush();
         continue;
       }
 
@@ -542,31 +665,52 @@ class ParsingService {
       final bool named = _letters(tail.name) >= 3;
 
       if (tail.nums.isEmpty) {
-        // Baris berisi nama saja: harga biasanya ada di baris berikutnya.
+        // Baris berisi nama saja: harganya ada di baris berikutnya.
         if (named) {
-          pending = tail.name;
+          if (prices.isNotEmpty) flush();
+          names.add(tail.name);
         } else if (tail.name.trim().isNotEmpty) {
-          pending = null;
+          flush();
         }
         continue;
       }
 
       if (named) {
+        flush();
         final ParsedItem? item =
             _buildItem(tail.name, tail.nums, tail.hasMarker);
         if (item != null) items.add(item);
       } else {
-        // Baris hanya angka: dipasangkan dengan nama pada baris sebelumnya.
-        final String? name = pending;
-        if (name != null) {
-          final ParsedItem? item = _buildItem(name, tail.nums, tail.hasMarker);
-          if (item != null) items.add(item);
-        }
+        prices.add(tail);
       }
-      pending = null;
       if (items.length >= _maxItems) break;
     }
-    return items;
+    flush();
+    return items.length > _maxItems ? items.sublist(0, _maxItems) : items;
+  }
+
+  /// Cadangan bila tidak ada satu pun baris barang yang dikenali (mis. struk
+  /// SPBU atau struk jasa): nama produk pertama dipasangkan dengan total.
+  ParsedItem? _singleItemFallback(
+      List<String> lines, int startIndex, double total) {
+    for (int i = startIndex; i < lines.length; i++) {
+      final String line = lines[i];
+      if (_isTotalBoundary(lines, i)) break;
+      if (_itemExclude.hasMatch(line) ||
+          _addressLike.hasMatch(line) ||
+          _discountLine.hasMatch(line) ||
+          _dateFromLine(line) != null ||
+          RegExp(r'\d').hasMatch(line) ||
+          line.length > 40) {
+        continue;
+      }
+      final String? name = _cleanItemName(line);
+      if (name != null) {
+        return ParsedItem(
+            name: name, quantity: 1, unitPrice: total, totalPrice: total);
+      }
+    }
+    return null;
   }
 
   String _normalizeLine(String raw) {
@@ -597,8 +741,17 @@ class ParsingService {
     while (i > 0 && _isTailToken(tokens[i - 1])) {
       i--;
     }
-    final List<String> prefix = tokens.sublist(0, i);
+    List<String> prefix = tokens.sublist(0, i);
     final List<String> tail = tokens.sublist(i);
+
+    // "2 SAK" / "1 KG" sebelum angka harga: angkanya adalah jumlah.
+    String? unitQty;
+    final RegExpMatch? unit = _qtyUnitEnd.firstMatch(prefix.join(' '));
+    if (unit != null && tail.isNotEmpty) {
+      unitQty = unit.group(1);
+      prefix = prefix.join(' ').substring(0, unit.start).trim().split(' ')
+        ..removeWhere((String t) => t.isEmpty);
+    }
 
     final bool hasNumber = tail.any(
       (String t) =>
@@ -610,7 +763,7 @@ class ParsingService {
     if (!hasNumber) return _Tail(tokens.join(' '), const <_Num>[], false);
 
     final List<_Num> nums = <_Num>[];
-    bool hasMarker = false;
+    bool hasMarker = unitQty != null;
 
     void add(String token) {
       final double? value = _parseAmount(token);
@@ -642,6 +795,10 @@ class ParsingService {
         continue;
       }
       add(t);
+    }
+    if (unitQty != null) {
+      final double? q = _parseAmount(unitQty);
+      if (q != null && q > 0) nums.insert(0, _Num(unitQty, q));
     }
     return _Tail(prefix.join(' '), nums, hasMarker);
   }

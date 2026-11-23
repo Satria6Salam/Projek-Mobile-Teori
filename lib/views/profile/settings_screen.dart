@@ -295,6 +295,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         onTap: () => context.push(AppRoutes.budget),
                       ),
                       _FeatureTile(
+                        icon: AppIcons.shoppingCart,
+                        color: const Color(0xFF0EA5E9),
+                        title: 'Rencana Belanja',
+                        subtitle: 'Catat dulu, coret otomatis saat scan struk',
+                        onTap: () => context.push(AppRoutes.shoppingPlan),
+                      ),
+                      _FeatureTile(
                         icon: AppIcons.penLine,
                         color: const Color(0xFF3B82F6),
                         title: 'Catat Manual & Berulang',
